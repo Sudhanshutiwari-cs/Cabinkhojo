@@ -156,9 +156,14 @@ export default function Home() {
           <div className="flex justify-between items-center h-16">
             <div className="flex items-center space-x-3">
               <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${
-                darkMode ? "bg-blue-600" : "bg-blue-600"
+                darkMode ? "" : ""
               }`}>
-                <BuildingIcon className="w-4 h-4 text-white" />
+               <img 
+  src="/logo_main.png" 
+  alt="Logo" 
+  className="w-18 h-18 object-contain"
+/>
+
               </div>
               <div>
                 <h1 className={`text-lg font-semibold ${themeClasses.text.primary}`}>Cabin Khojo</h1>
