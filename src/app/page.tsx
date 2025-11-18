@@ -161,7 +161,7 @@ export default function Home() {
                 <BuildingIcon className="w-4 h-4 text-white" />
               </div>
               <div>
-                <h1 className={`text-lg font-semibold ${themeClasses.text.primary}`}>Faculty Directory</h1>
+                <h1 className={`text-lg font-semibold ${themeClasses.text.primary}`}>Cabin Khojo</h1>
                 <p className={`text-xs ${themeClasses.text.muted}`}>Staff Locator System</p>
               </div>
             </div>
@@ -189,7 +189,7 @@ export default function Home() {
           <div className={`rounded-lg ${themeClasses.card} p-6 transition-colors duration-300`}>
             <div className="mb-6">
               <h2 className={`text-xl font-semibold ${themeClasses.text.primary} mb-2`}>
-                Faculty Search
+                Kanpur Instiute of Technology Faculty Search
               </h2>
               <p className={`text-sm ${themeClasses.text.secondary}`}>
                 Search for faculty members by name to locate their cabin and department information
@@ -377,7 +377,7 @@ export default function Home() {
           <div className="flex justify-between items-center">
             <div>
               <p className={`text-sm ${themeClasses.text.muted}`}>
-                © 2024 Faculty Directory System
+                © 2025 Cabin Khojo
               </p>
             </div>
             <div>
