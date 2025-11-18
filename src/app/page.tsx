@@ -150,7 +150,7 @@ export default function Home() {
             <h1 className={`text-2xl font-bold ${themeClasses.text.primary} mb-4`}>
               KANPUR INSTITUTE OF TECHNOLOGY
             </h1>
-            <p className={`text-sm ${themeClasses.text.muted} mb-2`}>ACCE APPROVED | AKTU AFFILIATED</p>
+            <p className={`text-sm ${themeClasses.text.muted} mb-2`}>AICTE APPROVED | AKTU AFFILIATED</p>
             
             <div className={`rounded-lg p-4 ${
               darkMode ? "bg-gray-700/50" : "bg-gray-50"
