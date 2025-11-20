@@ -20,6 +20,7 @@ import {
   FiDownload,
   FiAward
 } from 'react-icons/fi';
+import { useRouter } from 'next/navigation';
 
 interface Profile {
   id: string;
@@ -40,6 +41,7 @@ interface GatePassWithStudent extends GatePass {
 }
 
 export default function HODRequests() {
+  const router = useRouter();
   const [gatePasses, setGatePasses] = useState<GatePassWithStudent[]>([]);
   const [loading, setLoading] = useState(true);
   const [processing, setProcessing] = useState<string | null>(null);
@@ -66,6 +68,8 @@ export default function HODRequests() {
       if (!user) {
         setUnauthorized(true);
         setDebugInfo('No user found in authentication');
+        // Redirect to login immediately
+        router.push('/login');
         return;
       }
 
@@ -82,6 +86,7 @@ export default function HODRequests() {
         console.error('Error fetching profile:', error);
         setDebugInfo(`Profile error: ${error.message}`);
         setUnauthorized(true);
+        router.push('/login');
         return;
       }
 
@@ -91,6 +96,8 @@ export default function HODRequests() {
         console.log('Unauthorized: User is not HOD');
         setDebugInfo(`User role is: ${profile?.role}, expected: hod`);
         setUnauthorized(true);
+        // Redirect non-HOD users to dashboard instead of login
+        router.push('/login');
         return;
       }
 
@@ -102,6 +109,7 @@ export default function HODRequests() {
       console.error('Error checking user role:', error);
       setDebugInfo(`Error: ${error}`);
       setUnauthorized(true);
+      router.push('/login');
     }
   };
 
@@ -323,10 +331,19 @@ export default function HODRequests() {
     return pass.status === filter;
   });
 
-  // Debug information component
- 
+  // Show loading state while checking authentication
+  if (loading && !userRole && !unauthorized) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 flex items-center justify-center">
+        <div className="text-center">
+          <div className="w-16 h-16 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+          <p className="text-gray-600">Checking authentication...</p>
+        </div>
+      </div>
+    );
+  }
 
-  // Unauthorized access
+  // Unauthorized access - Show brief message before redirect
   if (unauthorized) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-red-50 to-red-100 flex items-center justify-center p-4">
@@ -340,7 +357,9 @@ export default function HODRequests() {
           </div>
           <h2 className="text-2xl font-bold text-gray-900 mb-2">Access Denied</h2>
           <p className="text-gray-600 mb-4">
-            This section is restricted to Head of Department (HOD) only. 
+            {userRole === 'hod' 
+              ? 'Redirecting to dashboard...' 
+              : 'Please log in to access this page.'}
           </p>
           <div className="bg-gray-100 p-3 rounded-lg mb-4 text-left">
             <p className="text-sm text-gray-700"><strong>Debug Info:</strong> {debugInfo}</p>
@@ -348,10 +367,10 @@ export default function HODRequests() {
           </div>
           <div className="space-y-3">
             <button
-              onClick={() => window.location.href = '/dashboard'}
+              onClick={() => router.push(userRole === 'hod' ? '/dashboard' : '/login')}
               className="w-full bg-red-600 text-white py-3 px-4 rounded-lg hover:bg-red-700 transition-colors font-medium"
             >
-              Go to Dashboard
+              {userRole === 'hod' ? 'Go to Dashboard' : 'Go to Login'}
             </button>
             <button
               onClick={checkUserRoleAndDepartment}
@@ -402,7 +421,11 @@ export default function HODRequests() {
     <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 p-4 md:p-8">
       <div className="max-w-7xl mx-auto">
         {/* Debug Info - Remove in production */}
- 
+        {debugInfo && (
+          <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mb-4">
+            <p className="text-sm text-yellow-800"><strong>Debug:</strong> {debugInfo}</p>
+          </div>
+        )}
 
         {/* Header */}
         <motion.div

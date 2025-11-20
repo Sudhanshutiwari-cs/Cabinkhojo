@@ -66,7 +66,7 @@ export default function GuardScanner() {
             setScanning(true);
             setCameraReady(true);
             initializeScanner();
-          }).catch(err => {
+          }).catch((err: Error) => {
             setError('Failed to start camera: ' + err.message);
           });
         };
@@ -75,8 +75,9 @@ export default function GuardScanner() {
           setError('Camera error occurred');
         };
       }
-    } catch (err: any) {
-      setError('Camera access denied. Please allow camera permissions and refresh.');
+    } catch (err: unknown) {
+      const errorMessage = err instanceof Error ? err.message : 'Camera access denied. Please allow camera permissions and refresh.';
+      setError(errorMessage);
       setScanning(false);
       setCameraReady(false);
     }
@@ -88,8 +89,9 @@ export default function GuardScanner() {
     try {
       codeReaderRef.current = new BrowserQRCodeReader();
       startContinuousScanning();
-    } catch (err: any) {
-      setError('Failed to initialize scanner');
+    } catch (err: unknown) {
+      const errorMessage = err instanceof Error ? err.message : 'Failed to initialize scanner';
+      setError(errorMessage);
     }
   };
 
