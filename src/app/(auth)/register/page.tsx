@@ -47,8 +47,12 @@ export default function Register() {
         alert('Registration successful! Please login.');
         router.push('/login');
       }
-    } catch (error: any) {
-      alert(error.message);
+    } catch (error: unknown) {
+      if (error instanceof Error) {
+        alert(error.message);
+      } else {
+        alert('An unexpected error occurred');
+      }
     } finally {
       setLoading(false);
     }
