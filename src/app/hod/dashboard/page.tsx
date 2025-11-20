@@ -33,9 +33,12 @@ interface Profile {
 
 interface GatePassWithStudent extends GatePass {
   student: {
+    id: string;
     name: string;
     roll: string;
     department: string;
+    role: 'student' | 'hod' | 'guard';
+    created_at: string;
   };
   hod_id: string;
 }
