@@ -46,6 +46,13 @@ interface SupabaseError {
   hint?: string;
 }
 
+interface QRCodeData {
+  passId: string;
+  studentId: string;
+  timestamp: string;
+  department: string | null;
+}
+
 export default function HODRequests() {
   const router = useRouter();
   const [gatePasses, setGatePasses] = useState<GatePassWithStudent[]>([]);
@@ -104,8 +111,9 @@ export default function HODRequests() {
       setUserDepartment(profile.department);
       setDebugInfo(`Authenticated as HOD: ${profile.name}, Department: ${profile.department}`);
       
-    } catch (error) {
-      setDebugInfo(`Error: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      setDebugInfo(`Error: ${errorMessage}`);
       setUnauthorized(true);
       router.push('/login');
     }
@@ -157,7 +165,7 @@ export default function HODRequests() {
 
   const generateQRCode = async (passId: string, studentId: string): Promise<string> => {
     try {
-      const qrData = {
+      const qrData: QRCodeData = {
         passId,
         studentId,
         timestamp: new Date().toISOString(),
@@ -190,8 +198,9 @@ export default function HODRequests() {
         .getPublicUrl(`${passId}.png`);
 
       return urlData.publicUrl;
-    } catch (error) {
-      throw new Error(`QR code generation failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      throw new Error(`QR code generation failed: ${errorMessage}`);
     }
   };
 
@@ -273,7 +282,9 @@ export default function HODRequests() {
   };
 
   const showNotification = (message: string, type: 'success' | 'error' | 'warning' | 'info'): void => {
-    alert(message);
+    // In a real application, you would use a proper notification system
+    // For now, we'll keep it as alert but remove the console.log statements
+    alert(`${type.toUpperCase()}: ${message}`);
   };
 
   const getStatusConfig = (status: string) => {
@@ -310,7 +321,7 @@ export default function HODRequests() {
       a.click();
       window.URL.revokeObjectURL(url);
       document.body.removeChild(a);
-    } catch (error) {
+    } catch (error: unknown) {
       showNotification('Error downloading QR code', 'error');
     }
   };
@@ -642,7 +653,7 @@ export default function HODRequests() {
                                     <span className="text-sm font-medium">QR Code Generated</span>
                                   </div>
                                   <button
-                                    onClick={() => downloadQRCode(pass.qr_url, student?.name)}
+                                    onClick={() => downloadQRCode(pass.qr_url!, student?.name)}
                                     className="flex items-center space-x-1 text-green-700 hover:text-green-800 text-sm font-medium px-3 py-1 rounded-lg bg-green-100 hover:bg-green-200 transition-colors"
                                   >
                                     <FiDownload className="w-3 h-3" />
