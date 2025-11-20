@@ -38,8 +38,8 @@ export default function GatePassQR() {
         const qrImage = await QRCode.toDataURL(JSON.stringify(qrData));
         setQrCode(qrImage);
       }
-    } catch (error: any) {
-      console.error('Error fetching gate pass:', error.message);
+    } catch (error: unknown) {
+      console.error('Error fetching gate pass:', error instanceof Error ? error.message : 'Unknown error');
     } finally {
       setLoading(false);
     }
