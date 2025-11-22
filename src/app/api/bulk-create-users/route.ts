@@ -1,5 +1,5 @@
-import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import { NextResponse } from "next/server";
 
 export async function POST(req: Request) {
   try {
@@ -34,9 +34,9 @@ export async function POST(req: Request) {
     }
 
     return NextResponse.json({ logs });
-  } catch (error: any) {
+  } catch (error: unknown) {
     return NextResponse.json(
-      { error: error.message },
+      { error: error instanceof Error ? error.message : "An unknown error occurred" },
       { status: 500 }
     );
   }
