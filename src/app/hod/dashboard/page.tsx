@@ -23,7 +23,8 @@ import {
   FiUsers,
   FiList,
   FiArrowUp,
-  FiArrowDown
+  FiArrowDown,
+  FiFileText
 } from 'react-icons/fi';
 import { useRouter } from 'next/navigation';
 
@@ -92,6 +93,7 @@ export default function HODRequests() {
   const [selectedYear, setSelectedYear] = useState<number | 'all'>('all');
   const [studentsLoading, setStudentsLoading] = useState(false);
   const [promoteDemoteLoading, setPromoteDemoteLoading] = useState<string | null>(null);
+  const [exportLoading, setExportLoading] = useState<number | 'all' | null>(null);
 
   useEffect(() => {
     checkUserRoleAndDepartment();
@@ -274,137 +276,261 @@ export default function HODRequests() {
       console.error('Alternative approach error:', error);
     }
   };
-const fetchStudents = async (): Promise<void> => {
-  try {
-    setStudentsLoading(true);
-    
-    const { data, error } = await supabase
-      .from('profiles')
-      .select('*')
-      .eq('department', userDepartment)
-      .eq('role', 'student')
-      .order('year', { ascending: false })
-      .order('roll', { ascending: true });
 
-    if (error) {
-      console.error('Students query error:', error);
-      setDebugInfo(prev => prev + ` | Students query error: ${error.message}`);
-      throw error;
-    }
+  const fetchStudents = async (): Promise<void> => {
+    try {
+      setStudentsLoading(true);
+      
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('department', userDepartment)
+        .eq('role', 'student')
+        .order('year', { ascending: false })
+        .order('roll', { ascending: true });
 
-    // Convert year from string to number for local state
-    const studentsWithNumberYear = (data || []).map(student => ({
-      ...student,
-      year: parseInt(student.year || '1', 10) // Convert string to number, default to 1 if null
-    }));
+      if (error) {
+        console.error('Students query error:', error);
+        setDebugInfo(prev => prev + ` | Students query error: ${error.message}`);
+        throw error;
+      }
 
-    console.log('Department students:', studentsWithNumberYear);
-    setStudents(studentsWithNumberYear);
-    setDebugInfo(prev => prev + ` | Found ${data?.length} students`);
-    
-  } catch (error: unknown) {
-    const err = error as SupabaseError;
-    console.error('Students fetch error:', error);
-    if (err.details) {
-      setDebugInfo(prev => prev + ` | Details: ${err.details}`);
+      // Convert year from string to number for local state
+      const studentsWithNumberYear = (data || []).map(student => ({
+        ...student,
+        year: parseInt(student.year || '1', 10) // Convert string to number, default to 1 if null
+      }));
+
+      console.log('Department students:', studentsWithNumberYear);
+      setStudents(studentsWithNumberYear);
+      setDebugInfo(prev => prev + ` | Found ${data?.length} students`);
+      
+    } catch (error: unknown) {
+      const err = error as SupabaseError;
+      console.error('Students fetch error:', error);
+      if (err.details) {
+        setDebugInfo(prev => prev + ` | Details: ${err.details}`);
+      }
+      if (err.hint) {
+        setDebugInfo(prev => prev + ` | Hint: ${err.hint}`);
+      }
+    } finally {
+      setStudentsLoading(false);
     }
-    if (err.hint) {
-      setDebugInfo(prev => prev + ` | Hint: ${err.hint}`);
-    }
-  } finally {
-    setStudentsLoading(false);
-  }
-};
+  };
 
   const handlePromoteStudent = async (studentId: string, currentYear: number): Promise<void> => {
-  try {
-    setPromoteDemoteLoading(studentId);
-    
-    console.log('Promoting student:', studentId, 'Current year:', currentYear, 'Type:', typeof currentYear);
-    
-    // Check if student is already at maximum year
-    if (currentYear >= 4) {
-      showNotification('Student is already in the final year (Year 4) and cannot be promoted further.', 'warning');
-      return;
+    try {
+      setPromoteDemoteLoading(studentId);
+      
+      console.log('Promoting student:', studentId, 'Current year:', currentYear, 'Type:', typeof currentYear);
+      
+      // Check if student is already at maximum year
+      if (currentYear >= 4) {
+        showNotification('Student is already in the final year (Year 4) and cannot be promoted further.', 'warning');
+        return;
+      }
+      
+      const newYear = currentYear + 1;
+      
+      console.log('New year will be:', newYear);
+      
+      // Convert to string since the database expects text
+      const newYearString = String(newYear);
+      
+      const { error } = await supabase
+        .from('profiles')
+        .update({ year: newYearString })
+        .eq('id', studentId);
+
+      if (error) throw error;
+
+      showNotification(`Student promoted to Year ${newYear} successfully!`, 'success');
+      
+      // Update local state - keep as number for local state
+      setStudents(prev => prev.map(student => 
+        student.id === studentId ? { ...student, year: newYear } : student
+      ));
+      
+    } catch (error: unknown) {
+      const err = error as SupabaseError;
+      
+      // Handle specific constraint violation
+      if (err.message.includes('profiles_year_check')) {
+        showNotification('Cannot promote student: Year value must be between 1 and 4.', 'error');
+      } else {
+        showNotification('Error promoting student: ' + err.message, 'error');
+      }
+    } finally {
+      setPromoteDemoteLoading(null);
     }
-    
-    const newYear = currentYear + 1;
-    
-    console.log('New year will be:', newYear);
-    
-    // Convert to string since the database expects text
-    const newYearString = String(newYear);
-    
-    const { error } = await supabase
-      .from('profiles')
-      .update({ year: newYearString })
-      .eq('id', studentId);
+  };
 
-    if (error) throw error;
+  const handleDemoteStudent = async (studentId: string, currentYear: number): Promise<void> => {
+    try {
+      setPromoteDemoteLoading(studentId);
+      
+      // Check if student is already at minimum year
+      if (currentYear <= 1) {
+        showNotification('Student is already in Year 1 and cannot be demoted further.', 'warning');
+        return;
+      }
+      
+      const newYear = currentYear - 1;
+      
+      // Convert to string since the database expects text
+      const newYearString = String(newYear);
+      
+      const { error } = await supabase
+        .from('profiles')
+        .update({ year: newYearString })
+        .eq('id', studentId);
 
-    showNotification(`Student promoted to Year ${newYear} successfully!`, 'success');
-    
-    // Update local state - keep as number for local state
-    setStudents(prev => prev.map(student => 
-      student.id === studentId ? { ...student, year: newYear } : student
-    ));
-    
-  } catch (error: unknown) {
-    const err = error as SupabaseError;
-    
-    // Handle specific constraint violation
-    if (err.message.includes('profiles_year_check')) {
-      showNotification('Cannot promote student: Year value must be between 1 and 4.', 'error');
-    } else {
-      showNotification('Error promoting student: ' + err.message, 'error');
+      if (error) throw error;
+
+      showNotification(`Student demoted to Year ${newYear} successfully!`, 'warning');
+      
+      // Update local state - keep as number for local state
+      setStudents(prev => prev.map(student => 
+        student.id === studentId ? { ...student, year: newYear } : student
+      ));
+      
+    } catch (error: unknown) {
+      const err = error as SupabaseError;
+      
+      // Handle specific constraint violation
+      if (err.message.includes('profiles_year_check')) {
+        showNotification('Cannot demote student: Year value must be between 1 and 4.', 'error');
+      } else {
+        showNotification('Error demoting student: ' + err.message, 'error');
+      }
+    } finally {
+      setPromoteDemoteLoading(null);
     }
-  } finally {
-    setPromoteDemoteLoading(null);
-  }
-};
+  };
 
-const handleDemoteStudent = async (studentId: string, currentYear: number): Promise<void> => {
-  try {
-    setPromoteDemoteLoading(studentId);
-    
-    // Check if student is already at minimum year
-    if (currentYear <= 1) {
-      showNotification('Student is already in Year 1 and cannot be demoted further.', 'warning');
-      return;
+  const exportToExcel = async (year: number | 'all' = 'all'): Promise<void> => {
+    try {
+      setExportLoading(year);
+      
+      // Filter students based on selected year
+      const studentsToExport = year === 'all' 
+        ? students 
+        : students.filter(student => student.year === year);
+      
+      if (studentsToExport.length === 0) {
+        showNotification('No students found to export', 'warning');
+        return;
+      }
+
+      // Create CSV content
+      const headers = ['Name', 'Roll Number', 'Year', 'Department', 'Student ID', 'Joined Date'];
+      const csvContent = [
+        headers.join(','),
+        ...studentsToExport.map(student => [
+          `"${student.name.replace(/"/g, '""')}"`,
+          student.roll,
+          student.year,
+          `"${student.department}"`,
+          student.id,
+          new Date(student.created_at).toLocaleDateString()
+        ].join(','))
+      ].join('\n');
+
+      // Create blob and download
+      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.setAttribute('href', url);
+      
+      const fileName = year === 'all' 
+        ? `${userDepartment}_all_students.csv`
+        : `${userDepartment}_batch_${year}_students.csv`;
+      
+      link.setAttribute('download', fileName);
+      link.style.visibility = 'hidden';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      
+      showNotification(`Exported ${studentsToExport.length} students successfully!`, 'success');
+      
+    } catch (error: unknown) {
+      const err = error as SupabaseError;
+      showNotification('Error exporting students: ' + err.message, 'error');
+    } finally {
+      setExportLoading(null);
     }
-    
-    const newYear = currentYear - 1;
-    
-    // Convert to string since the database expects text
-    const newYearString = String(newYear);
-    
-    const { error } = await supabase
-      .from('profiles')
-      .update({ year: newYearString })
-      .eq('id', studentId);
+  };
 
-    if (error) throw error;
+  const exportAllBatches = async (): Promise<void> => {
+    try {
+      setExportLoading('all');
+      
+      if (students.length === 0) {
+        showNotification('No students found to export', 'warning');
+        return;
+      }
 
-    showNotification(`Student demoted to Year ${newYear} successfully!`, 'warning');
-    
-    // Update local state - keep as number for local state
-    setStudents(prev => prev.map(student => 
-      student.id === studentId ? { ...student, year: newYear } : student
-    ));
-    
-  } catch (error: unknown) {
-    const err = error as SupabaseError;
-    
-    // Handle specific constraint violation
-    if (err.message.includes('profiles_year_check')) {
-      showNotification('Cannot demote student: Year value must be between 1 and 4.', 'error');
-    } else {
-      showNotification('Error demoting student: ' + err.message, 'error');
+      // Group students by year
+      const studentsByYear: { [key: number]: Student[] } = {};
+      students.forEach(student => {
+        if (!studentsByYear[student.year]) {
+          studentsByYear[student.year] = [];
+        }
+        studentsByYear[student.year].push(student);
+      });
+
+      // Create CSV content with year sections
+      const headers = ['Name', 'Roll Number', 'Year', 'Department', 'Student ID', 'Joined Date'];
+      let csvContent = [];
+      
+      // Add header
+      csvContent.push(headers.join(','));
+      
+      // Add all students
+      students.forEach(student => {
+        csvContent.push([
+          `"${student.name.replace(/"/g, '""')}"`,
+          student.roll,
+          student.year,
+          `"${student.department}"`,
+          student.id,
+          new Date(student.created_at).toLocaleDateString()
+        ].join(','));
+      });
+
+      // Add summary section
+      csvContent.push(''); // Empty line
+      csvContent.push('SUMMARY');
+      csvContent.push('Year,Total Students');
+      Object.keys(studentsByYear).sort().forEach(year => {
+        csvContent.push(`${year},${studentsByYear[parseInt(year)].length}`);
+      });
+      csvContent.push(`TOTAL,${students.length}`);
+
+      const finalCsvContent = csvContent.join('\n');
+
+      // Create blob and download
+      const blob = new Blob([finalCsvContent], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.setAttribute('href', url);
+      link.setAttribute('download', `${userDepartment}_all_batches_students.csv`);
+      link.style.visibility = 'hidden';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      
+      showNotification(`Exported all ${students.length} students successfully!`, 'success');
+      
+    } catch (error: unknown) {
+      const err = error as SupabaseError;
+      showNotification('Error exporting students: ' + err.message, 'error');
+    } finally {
+      setExportLoading(null);
     }
-  } finally {
-    setPromoteDemoteLoading(null);
-  }
-};
+  };
 
   const handleLogout = async (): Promise<void> => {
     try {
@@ -601,8 +727,6 @@ const handleDemoteStudent = async (studentId: string, currentYear: number): Prom
     ? students 
     : students.filter(student => student.year === selectedYear);
 
-
-
   if (loading && !userRole && !unauthorized) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 flex items-center justify-center">
@@ -682,8 +806,6 @@ const handleDemoteStudent = async (studentId: string, currentYear: number): Prom
     <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 p-4 md:p-8">
       <div className="max-w-7xl mx-auto">
         
-        
-
         <motion.div
           initial={{ opacity: 0, y: -20 }}
           animate={{ opacity: 1, y: 0 }}
@@ -814,30 +936,57 @@ const handleDemoteStudent = async (studentId: string, currentYear: number): Prom
                     <FiUsers className="w-6 h-6" />
                   </div>
                 </div>
+                <button
+                  onClick={() => exportToExcel('all')}
+                  disabled={exportLoading !== null || students.length === 0}
+                  className="w-full flex items-center justify-center space-x-2 bg-blue-600 text-white py-2 px-4 rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-colors text-sm mt-4"
+                >
+                  {exportLoading === 'all' ? (
+                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                  ) : (
+                    <FiDownload className="w-4 h-4" />
+                  )}
+                  <span>Export All</span>
+                </button>
               </motion.div>
               
-              {availableYears.map((year, index) => (
-                <motion.div
-                  key={year}
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: (index + 1) * 0.1 }}
-                  className="bg-white rounded-2xl shadow-sm border p-6 hover:shadow-md transition-shadow"
-                >
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="text-sm font-medium text-gray-600">Batch {year}</p>
-                      <p className="text-3xl font-bold text-gray-900 mt-2">
-                        {students.filter(s => s.year === year).length}
-                      </p>
-                      <p className="text-xs text-gray-500 mt-1">Students</p>
+              {availableYears.map((year, index) => {
+                const batchStudents = students.filter(s => s.year === year);
+                return (
+                  <motion.div
+                    key={year}
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: (index + 1) * 0.1 }}
+                    className="bg-white rounded-2xl shadow-sm border p-6 hover:shadow-md transition-shadow"
+                  >
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="text-sm font-medium text-gray-600">Batch {year}</p>
+                        <p className="text-3xl font-bold text-gray-900 mt-2">
+                          {batchStudents.length}
+                        </p>
+                        <p className="text-xs text-gray-500 mt-1">Students</p>
+                      </div>
+                      <div className="p-3 rounded-xl bg-green-100 text-green-600">
+                        <FiUser className="w-6 h-6" />
+                      </div>
                     </div>
-                    <div className="p-3 rounded-xl bg-green-100 text-green-600">
-                      <FiUser className="w-6 h-6" />
-                    </div>
-                  </div>
-                </motion.div>
-              ))}
+                    <button
+                      onClick={() => exportToExcel(year)}
+                      disabled={exportLoading !== null || batchStudents.length === 0}
+                      className="w-full flex items-center justify-center space-x-2 bg-green-600 text-white py-2 px-4 rounded-lg hover:bg-green-700 disabled:opacity-50 transition-colors text-sm mt-4"
+                    >
+                      {exportLoading === year ? (
+                        <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                      ) : (
+                        <FiDownload className="w-4 h-4" />
+                      )}
+                      <span>Export Batch</span>
+                    </button>
+                  </motion.div>
+                );
+              })}
             </div>
           )}
         </motion.div>
@@ -883,40 +1032,78 @@ const handleDemoteStudent = async (studentId: string, currentYear: number): Prom
             transition={{ delay: 0.2 }}
             className="mb-8"
           >
-            <div className="flex flex-wrap gap-3 items-center">
-              <div className="flex items-center space-x-2 text-gray-600 mr-4">
-                <FiFilter className="w-4 h-4" />
-                <span className="text-sm font-medium">Filter by year:</span>
-              </div>
-              <button
-                onClick={() => setSelectedYear('all')}
-                className={`px-4 py-2 rounded-xl font-medium transition-all duration-200 flex items-center space-x-2 ${
-                  selectedYear === 'all'
-                    ? 'bg-blue-600 text-white shadow-lg shadow-blue-500/25'
-                    : 'bg-white text-gray-700 border border-gray-300 hover:bg-gray-50 hover:border-gray-400'
-                }`}
-              >
-                <span>All Years</span>
-                <span className="px-2 py-1 text-xs bg-white/20 rounded-full">
-                  {students.length}
-                </span>
-              </button>
-              {availableYears.map((year) => (
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
+              <div className="flex flex-wrap gap-3 items-center">
+                <div className="flex items-center space-x-2 text-gray-600 mr-4">
+                  <FiFilter className="w-4 h-4" />
+                  <span className="text-sm font-medium">Filter by year:</span>
+                </div>
                 <button
-                  key={year}
-                  onClick={() => setSelectedYear(year)}
+                  onClick={() => setSelectedYear('all')}
                   className={`px-4 py-2 rounded-xl font-medium transition-all duration-200 flex items-center space-x-2 ${
-                    selectedYear === year
+                    selectedYear === 'all'
                       ? 'bg-blue-600 text-white shadow-lg shadow-blue-500/25'
                       : 'bg-white text-gray-700 border border-gray-300 hover:bg-gray-50 hover:border-gray-400'
                   }`}
                 >
-                  <span>Batch {year}</span>
+                  <span>All Years</span>
                   <span className="px-2 py-1 text-xs bg-white/20 rounded-full">
-                    {students.filter(s => s.year === year).length}
+                    {students.length}
                   </span>
                 </button>
-              ))}
+                {availableYears.map((year) => (
+                  <button
+                    key={year}
+                    onClick={() => setSelectedYear(year)}
+                    className={`px-4 py-2 rounded-xl font-medium transition-all duration-200 flex items-center space-x-2 ${
+                      selectedYear === year
+                        ? 'bg-blue-600 text-white shadow-lg shadow-blue-500/25'
+                        : 'bg-white text-gray-700 border border-gray-300 hover:bg-gray-50 hover:border-gray-400'
+                    }`}
+                  >
+                    <span>Batch {year}</span>
+                    <span className="px-2 py-1 text-xs bg-white/20 rounded-full">
+                      {students.filter(s => s.year === year).length}
+                    </span>
+                  </button>
+                ))}
+              </div>
+              
+              {/* Export Buttons */}
+              <div className="flex flex-wrap gap-3">
+                {/* Export Current View Button */}
+                <button
+                  onClick={() => exportToExcel(selectedYear)}
+                  disabled={exportLoading !== null || filteredStudents.length === 0}
+                  className="flex items-center space-x-2 bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 disabled:opacity-50 transition-colors"
+                >
+                  {exportLoading === selectedYear ? (
+                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                  ) : (
+                    <FiFileText className="w-4 h-4" />
+                  )}
+                  <span>
+                    {selectedYear === 'all' 
+                      ? `Export All (${filteredStudents.length})`
+                      : `Export Batch ${selectedYear} (${filteredStudents.length})`
+                    }
+                  </span>
+                </button>
+
+                {/* Export All Batches Button */}
+                <button
+                  onClick={exportAllBatches}
+                  disabled={exportLoading !== null || students.length === 0}
+                  className="flex items-center space-x-2 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-colors"
+                >
+                  {exportLoading === 'all' ? (
+                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                  ) : (
+                    <FiDownload className="w-4 h-4" />
+                  )}
+                  <span>Export All Batches ({students.length})</span>
+                </button>
+              </div>
             </div>
           </motion.div>
         )}

@@ -272,7 +272,15 @@ export default function AdminPanel() {
     "Applied Science and Humanities",
     "Admission Cell",
     "Computer Science",
-    "Administration"
+    "Administration",
+    "Physics Department",
+    "Mathematics Department",
+    "Microbiology Department",
+    "Chemistry Department",
+    "Psychology Department",
+    "PCRC",
+    "SDC",
+
   ];
 
   // Login Form

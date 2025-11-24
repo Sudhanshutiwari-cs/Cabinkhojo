@@ -69,31 +69,42 @@ export default function Home() {
   const [darkMode, setDarkMode] = useState<boolean>(false);
 
   const searchTeacher = async (): Promise<void> => {
-    if (!query.trim()) return;
+  if (!query.trim()) return;
+  
+  setLoading(true);
+  setTeachers(null);
+
+  try {
+    console.log('Searching for:', query); // Debug log
     
-    setLoading(true);
-    setTeachers(null);
+    const { data, error, status } = await supabase
+      .from("teachers")
+      .select("*")
+      .ilike("name", `%${query}%`);
 
-    try {
-      const { data, error } = await supabase
-        .from("teachers")
-        .select("*")
-        .ilike("name", `%${query}%`);
+    console.log('Supabase response:', { data, error, status }); // Debug log
 
-      if (error) {
-        console.error("Error searching teacher:", error);
-        return;
-      }
-
-      setTeachers(data?.length > 0 ? data : "notfound");
-    } catch (error) {
-      console.error("Error searching teacher:", error);
+    if (error) {
+      console.error("Supabase error:", error);
       setTeachers("notfound");
-    } finally {
-      setLoading(false);
+      return;
     }
-  };
 
+    if (!data) {
+      console.error("No data returned from Supabase");
+      setTeachers("notfound");
+      return;
+    }
+
+    setTeachers(data.length > 0 ? data : "notfound");
+    
+  } catch (error) {
+    console.error("Unexpected error searching teacher:", error);
+    setTeachers("notfound");
+  } finally {
+    setLoading(false);
+  }
+};
   const handleKeyPress = (e: KeyboardEvent<HTMLInputElement>): void => {
     if (e.key === "Enter") {
       searchTeacher();
