@@ -20,6 +20,10 @@ export default function ResetPasswordClient({ serverAccessToken }: ResetPassword
   const [showConfirm, setShowConfirm] = useState(false);
   const [passwordStrength, setPasswordStrength] = useState(0);
   const [isValidToken, setIsValidToken] = useState<boolean | null>(null);
+  const [debugInfo, setDebugInfo] = useState<string>("");
+
+  console.log("🔍 [CLIENT] ResetPasswordClient - serverAccessToken:", serverAccessToken);
+  console.log("🔍 [CLIENT] ResetPasswordClient - isValidToken:", isValidToken);
 
   // Password strength checker
   useEffect(() => {
@@ -34,26 +38,66 @@ export default function ResetPasswordClient({ serverAccessToken }: ResetPassword
   // Verify token and set session
   useEffect(() => {
     const verifyToken = async () => {
+      console.log("🔄 [CLIENT] Starting token verification...");
+      setDebugInfo("Starting token verification...");
+      
       if (!serverAccessToken) {
+        console.log("❌ [CLIENT] No serverAccessToken provided");
+        setDebugInfo("No access token provided from server");
         setIsValidToken(false);
         return;
       }
 
+      console.log("🔑 [CLIENT] Token received:", serverAccessToken.substring(0, 20) + "...");
+
       try {
-        // For password reset, we need to exchange the token for a session
-        const { data, error } = await supabase.auth.verifyOtp({
+        setDebugInfo("Attempting to verify OTP with Supabase...");
+        
+        // Method 1: Try verifyOtp first
+        console.log("🔄 [CLIENT] Trying verifyOtp method...");
+        const { data: verifyData, error: verifyError } = await supabase.auth.verifyOtp({
           token_hash: serverAccessToken,
           type: 'recovery'
         });
 
-        if (error) {
-          console.error("Token verification error:", error);
-          setIsValidToken(false);
-        } else {
+        console.log("📋 [CLIENT] verifyOtp response - data:", verifyData);
+        console.log("📋 [CLIENT] verifyOtp response - error:", verifyError);
+
+        if (!verifyError) {
+          console.log("✅ [CLIENT] Token verified successfully via verifyOtp");
+          setDebugInfo("Token verified successfully via verifyOtp");
           setIsValidToken(true);
+          return;
         }
+
+        console.log("⚠️ [CLIENT] verifyOtp failed, trying setSession method...");
+        setDebugInfo("verifyOtp failed, trying setSession...");
+
+        // Method 2: Try setSession as fallback
+        const { data: sessionData, error: sessionError } = await supabase.auth.setSession({
+          access_token: serverAccessToken,
+          refresh_token: serverAccessToken,
+        });
+
+        console.log("📋 [CLIENT] setSession response - data:", sessionData);
+        console.log("📋 [CLIENT] setSession response - error:", sessionError);
+
+        if (!sessionError) {
+          console.log("✅ [CLIENT] Token verified successfully via setSession");
+          setDebugInfo("Token verified successfully via setSession");
+          setIsValidToken(true);
+          return;
+        }
+
+        console.log("❌ [CLIENT] Both verification methods failed");
+        console.log("❌ [CLIENT] verifyOtp error:", verifyError?.message);
+        console.log("❌ [CLIENT] setSession error:", sessionError?.message);
+        setDebugInfo(`Both methods failed: ${verifyError?.message} | ${sessionError?.message}`);
+        setIsValidToken(false);
+
       } catch (error) {
-        console.error("Token verification failed:", error);
+        console.error("💥 [CLIENT] Token verification crashed:", error);
+        setDebugInfo(`Verification crashed: ${error instanceof Error ? error.message : 'Unknown error'}`);
         setIsValidToken(false);
       }
     };
@@ -63,6 +107,9 @@ export default function ResetPasswordClient({ serverAccessToken }: ResetPassword
 
   const handleReset = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    console.log("🔄 [CLIENT] handleReset called");
+    console.log("🔍 [CLIENT] Current state - isValidToken:", isValidToken, "serverAccessToken:", serverAccessToken ? "Present" : "Missing");
 
     if (!serverAccessToken || !isValidToken) {
       setMessage("Invalid or expired token.");
@@ -83,34 +130,32 @@ export default function ResetPasswordClient({ serverAccessToken }: ResetPassword
     setMessage("");
 
     try {
-      // First verify the token again to ensure it's still valid
-      const { error: verifyError } = await supabase.auth.verifyOtp({
-        token_hash: serverAccessToken,
-        type: 'recovery'
-      });
+      console.log("🔄 [CLIENT] Attempting password update...");
+      
+      // Try direct password update without re-verification
+      const { data: userData, error: userError } = await supabase.auth.getUser();
+      console.log("📋 [CLIENT] Current user:", userData);
+      console.log("📋 [CLIENT] User error:", userError);
 
-      if (verifyError) {
-        setMessage("Token has expired. Please request a new reset link.");
-        setLoading(false);
-        return;
-      }
-
-      // Update the password
       const { error } = await supabase.auth.updateUser({
         password: password,
       });
 
+      console.log("📋 [CLIENT] Password update response - error:", error);
+
       if (error) {
-        setMessage(error.message);
+        setMessage(`Error: ${error.message}`);
+        console.error("❌ [CLIENT] Password update failed:", error);
       } else {
         setMessage("Password updated successfully! Redirecting to login...");
+        console.log("✅ [CLIENT] Password updated successfully");
         setTimeout(() => {
           router.push("/auth/login");
         }, 2000);
       }
     } catch (error) {
+      console.error("💥 [CLIENT] Password reset crashed:", error);
       setMessage("An unexpected error occurred. Please try again.");
-      console.error("Password reset error:", error);
     } finally {
       setLoading(false);
     }
@@ -139,7 +184,12 @@ export default function ResetPasswordClient({ serverAccessToken }: ResetPassword
             <Loader2 className="w-8 h-8 text-blue-600 animate-spin" />
           </div>
           <h1 className="text-2xl font-bold text-gray-900 mb-2">Verifying Link</h1>
-          <p className="text-gray-600">Checking your reset link...</p>
+          <p className="text-gray-600 mb-4">Checking your reset link...</p>
+          {debugInfo && (
+            <div className="mt-4 p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
+              <p className="text-xs text-yellow-800 font-mono break-all">Debug: {debugInfo}</p>
+            </div>
+          )}
         </div>
       </div>
     );
@@ -152,12 +202,17 @@ export default function ResetPasswordClient({ serverAccessToken }: ResetPassword
         <div className="bg-white rounded-2xl shadow-xl p-8 max-w-md w-full text-center">
           <XCircle className="w-16 h-16 text-red-500 mx-auto mb-4" />
           <h1 className="text-2xl font-bold text-gray-900 mb-2">Invalid or Expired Link</h1>
-          <p className="text-gray-600 mb-6">
+          <p className="text-gray-600 mb-4">
             This password reset link is invalid or has expired. Please request a new one.
           </p>
+          {debugInfo && (
+            <div className="mt-4 p-3 bg-red-50 border border-red-200 rounded-lg">
+              <p className="text-xs text-red-800 font-mono break-all">Debug: {debugInfo}</p>
+            </div>
+          )}
           <button
             onClick={() => router.push("/auth/forgot-password")}
-            className="w-full bg-blue-600 text-white py-3 px-4 rounded-lg hover:bg-blue-700 transition-colors font-medium"
+            className="w-full mt-6 bg-blue-600 text-white py-3 px-4 rounded-lg hover:bg-blue-700 transition-colors font-medium"
           >
             Request New Link
           </button>
@@ -181,6 +236,14 @@ export default function ResetPasswordClient({ serverAccessToken }: ResetPassword
             Create a strong password to secure your account
           </p>
         </div>
+
+        {/* Debug Info */}
+        {debugInfo && (
+          <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+            <p className="text-xs text-blue-800 font-mono break-all">Debug: {debugInfo}</p>
+            <p className="text-xs text-blue-600 mt-1">Token: {serverAccessToken.substring(0, 30)}...</p>
+          </div>
+        )}
 
         <form onSubmit={handleReset} className="space-y-6">
           {/* Password Field */}

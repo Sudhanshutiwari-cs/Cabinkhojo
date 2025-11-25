@@ -11,6 +11,9 @@ export default async function ResetPasswordPage({ searchParams }: PageProps) {
     ? params.access_token[0] 
     : params.access_token;
 
+  console.log("🔍 [SERVER] ResetPasswordPage - accessToken:", accessToken ? "Present" : "Missing");
+  console.log("🔍 [SERVER] ResetPasswordPage - full searchParams:", params);
+
   return (
     <Suspense fallback={<LoadingFallback />}>
       <ResetPasswordClient serverAccessToken={accessToken || null} />
