@@ -24,7 +24,9 @@ import {
   FiList,
   FiArrowUp,
   FiArrowDown,
-  FiFileText
+  FiFileText,
+  FiCheck,
+  FiSquare
 } from 'react-icons/fi';
 import { useRouter } from 'next/navigation';
 
@@ -76,6 +78,19 @@ interface Student {
 
 type ViewMode = 'gatepasses' | 'students';
 
+// Professional Icon Components from code 2
+const MoonIcon = ({ className = "w-4 h-4" }: { className?: string }) => (
+  <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" />
+  </svg>
+);
+
+const SunIcon = ({ className = "w-4 h-4" }: { className?: string }) => (
+  <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z" />
+  </svg>
+);
+
 export default function HODRequests() {
   const router = useRouter();
   const [gatePasses, setGatePasses] = useState<GatePassWithStudent[]>([]);
@@ -94,6 +109,36 @@ export default function HODRequests() {
   const [studentsLoading, setStudentsLoading] = useState(false);
   const [promoteDemoteLoading, setPromoteDemoteLoading] = useState<string | null>(null);
   const [exportLoading, setExportLoading] = useState<number | 'all' | null>(null);
+  const [darkMode, setDarkMode] = useState<boolean>(false);
+  const [selectedStudents, setSelectedStudents] = useState<Set<string>>(new Set());
+  const [batchOperationLoading, setBatchOperationLoading] = useState<boolean>(false);
+
+  // Professional theme classes from code 2
+  const themeClasses = {
+    background: darkMode 
+      ? "bg-gray-900" 
+      : "bg-gradient-to-br from-gray-50 to-gray-100",
+    header: darkMode
+      ? "bg-gray-800 border-b border-gray-700"
+      : "bg-white border-b border-gray-200",
+    card: darkMode 
+      ? "bg-gray-800 border border-gray-700" 
+      : "bg-white border border-gray-100",
+    text: {
+      primary: darkMode ? "text-white" : "text-gray-900",
+      secondary: darkMode ? "text-gray-300" : "text-gray-600",
+      muted: darkMode ? "text-gray-400" : "text-gray-500",
+    },
+    button: {
+      secondary: darkMode
+        ? "bg-gray-700 hover:bg-gray-600 text-white border border-gray-600"
+        : "bg-white text-gray-700 border border-gray-300 hover:bg-gray-50",
+    }
+  };
+
+  const toggleDarkMode = () => {
+    setDarkMode(!darkMode);
+  };
 
   useEffect(() => {
     checkUserRoleAndDepartment();
@@ -108,6 +153,11 @@ export default function HODRequests() {
       }
     }
   }, [userRole, userId, userDepartment, filter, viewMode, selectedYear]);
+
+  // Reset selections when year filter changes
+  useEffect(() => {
+    setSelectedStudents(new Set());
+  }, [selectedYear]);
 
   const checkUserRoleAndDepartment = async (): Promise<void> => {
     try {
@@ -162,19 +212,6 @@ export default function HODRequests() {
     try {
       setLoading(true);
       console.log('Fetching gate passes for HOD:', userId, 'Department:', userDepartment);
-
-      // First, let's try to get all gate passes to see what's available
-      const { data: allPasses, error: allError } = await supabase
-        .from('gatepasses')
-        .select('*')
-        .order('created_at', { ascending: false });
-
-      if (allError) {
-        console.error('Error fetching all gate passes:', allError);
-        setDebugInfo(prev => prev + ` | All passes error: ${allError.message}`);
-      } else {
-        console.log('All gate passes:', allPasses);
-      }
 
       // Try multiple query approaches to find what works
       let query = supabase
@@ -319,11 +356,272 @@ export default function HODRequests() {
     }
   };
 
+  // Selection handlers
+  const toggleStudentSelection = (studentId: string): void => {
+    setSelectedStudents(prev => {
+      const newSelection = new Set(prev);
+      if (newSelection.has(studentId)) {
+        newSelection.delete(studentId);
+      } else {
+        newSelection.add(studentId);
+      }
+      return newSelection;
+    });
+  };
+
+  const toggleSelectAll = (): void => {
+    if (selectedStudents.size === filteredStudents.length) {
+      setSelectedStudents(new Set());
+    } else {
+      setSelectedStudents(new Set(filteredStudents.map(student => student.id)));
+    }
+  };
+
+  const isStudentSelected = (studentId: string): boolean => {
+    return selectedStudents.has(studentId);
+  };
+
+  // Batch operations
+  const handleBatchPromote = async (): Promise<void> => {
+    if (selectedStudents.size === 0) {
+      showNotification('Please select at least one student to promote.', 'warning');
+      return;
+    }
+
+    try {
+      setBatchOperationLoading(true);
+      
+      const selectedStudentData = filteredStudents.filter(student => 
+        selectedStudents.has(student.id)
+      );
+
+      // Check if any student is already at maximum year
+      const maxYearStudent = selectedStudentData.find(student => student.year >= 4);
+      if (maxYearStudent) {
+        showNotification(`Cannot promote: ${maxYearStudent.name} is already in Year 4.`, 'warning');
+        return;
+      }
+
+      // Update all selected students
+      const updates = Array.from(selectedStudents).map(async (studentId) => {
+        const student = students.find(s => s.id === studentId);
+        if (student && student.year < 4) {
+          const newYear = student.year + 1;
+          const newYearString = String(newYear);
+          
+          const { error } = await supabase
+            .from('profiles')
+            .update({ year: newYearString })
+            .eq('id', studentId);
+
+          if (error) throw error;
+
+          return { studentId, newYear };
+        }
+        return null;
+      });
+
+      const results = await Promise.all(updates);
+      
+      // Update local state
+      setStudents(prev => prev.map(student => {
+        const update = results.find(r => r?.studentId === student.id);
+        if (update) {
+          return { ...student, year: update.newYear };
+        }
+        return student;
+      }));
+
+      showNotification(`Successfully promoted ${selectedStudents.size} student(s)!`, 'success');
+      setSelectedStudents(new Set());
+      
+    } catch (error: unknown) {
+      const err = error as SupabaseError;
+      showNotification('Error promoting students: ' + err.message, 'error');
+    } finally {
+      setBatchOperationLoading(false);
+    }
+  };
+
+  const handleBatchDemote = async (): Promise<void> => {
+    if (selectedStudents.size === 0) {
+      showNotification('Please select at least one student to demote.', 'warning');
+      return;
+    }
+
+    try {
+      setBatchOperationLoading(true);
+      
+      const selectedStudentData = filteredStudents.filter(student => 
+        selectedStudents.has(student.id)
+      );
+
+      // Check if any student is already at minimum year
+      const minYearStudent = selectedStudentData.find(student => student.year <= 1);
+      if (minYearStudent) {
+        showNotification(`Cannot demote: ${minYearStudent.name} is already in Year 1.`, 'warning');
+        return;
+      }
+
+      // Update all selected students
+      const updates = Array.from(selectedStudents).map(async (studentId) => {
+        const student = students.find(s => s.id === studentId);
+        if (student && student.year > 1) {
+          const newYear = student.year - 1;
+          const newYearString = String(newYear);
+          
+          const { error } = await supabase
+            .from('profiles')
+            .update({ year: newYearString })
+            .eq('id', studentId);
+
+          if (error) throw error;
+
+          return { studentId, newYear };
+        }
+        return null;
+      });
+
+      const results = await Promise.all(updates);
+      
+      // Update local state
+      setStudents(prev => prev.map(student => {
+        const update = results.find(r => r?.studentId === student.id);
+        if (update) {
+          return { ...student, year: update.newYear };
+        }
+        return student;
+      }));
+
+      showNotification(`Successfully demoted ${selectedStudents.size} student(s)!`, 'warning');
+      setSelectedStudents(new Set());
+      
+    } catch (error: unknown) {
+      const err = error as SupabaseError;
+      showNotification('Error demoting students: ' + err.message, 'error');
+    } finally {
+      setBatchOperationLoading(false);
+    }
+  };
+
+  const handlePromoteFullBatch = async (year: number): Promise<void> => {
+    const batchStudents = students.filter(student => student.year === year);
+    
+    if (batchStudents.length === 0) {
+      showNotification(`No students found in Year ${year}.`, 'warning');
+      return;
+    }
+
+    // Check if any student is already at maximum year
+    const maxYearStudent = batchStudents.find(student => student.year >= 4);
+    if (maxYearStudent) {
+      showNotification(`Cannot promote batch: ${maxYearStudent.name} is already in Year 4.`, 'warning');
+      return;
+    }
+
+    try {
+      setBatchOperationLoading(true);
+      
+      // Update all students in the batch
+      const updates = batchStudents.map(async (student) => {
+        if (student.year < 4) {
+          const newYear = student.year + 1;
+          const newYearString = String(newYear);
+          
+          const { error } = await supabase
+            .from('profiles')
+            .update({ year: newYearString })
+            .eq('id', student.id);
+
+          if (error) throw error;
+
+          return { studentId: student.id, newYear };
+        }
+        return null;
+      });
+
+      const results = await Promise.all(updates);
+      
+      // Update local state
+      setStudents(prev => prev.map(student => {
+        const update = results.find(r => r?.studentId === student.id);
+        if (update) {
+          return { ...student, year: update.newYear };
+        }
+        return student;
+      }));
+
+      showNotification(`Successfully promoted entire Year ${year} batch (${batchStudents.length} students)!`, 'success');
+      
+    } catch (error: unknown) {
+      const err = error as SupabaseError;
+      showNotification('Error promoting batch: ' + err.message, 'error');
+    } finally {
+      setBatchOperationLoading(false);
+    }
+  };
+
+  const handleDemoteFullBatch = async (year: number): Promise<void> => {
+    const batchStudents = students.filter(student => student.year === year);
+    
+    if (batchStudents.length === 0) {
+      showNotification(`No students found in Year ${year}.`, 'warning');
+      return;
+    }
+
+    // Check if any student is already at minimum year
+    const minYearStudent = batchStudents.find(student => student.year <= 1);
+    if (minYearStudent) {
+      showNotification(`Cannot demote batch: ${minYearStudent.name} is already in Year 1.`, 'warning');
+      return;
+    }
+
+    try {
+      setBatchOperationLoading(true);
+      
+      // Update all students in the batch
+      const updates = batchStudents.map(async (student) => {
+        if (student.year > 1) {
+          const newYear = student.year - 1;
+          const newYearString = String(newYear);
+          
+          const { error } = await supabase
+            .from('profiles')
+            .update({ year: newYearString })
+            .eq('id', student.id);
+
+          if (error) throw error;
+
+          return { studentId: student.id, newYear };
+        }
+        return null;
+      });
+
+      const results = await Promise.all(updates);
+      
+      // Update local state
+      setStudents(prev => prev.map(student => {
+        const update = results.find(r => r?.studentId === student.id);
+        if (update) {
+          return { ...student, year: update.newYear };
+        }
+        return student;
+      }));
+
+      showNotification(`Successfully demoted entire Year ${year} batch (${batchStudents.length} students)!`, 'warning');
+      
+    } catch (error: unknown) {
+      const err = error as SupabaseError;
+      showNotification('Error demoting batch: ' + err.message, 'error');
+    } finally {
+      setBatchOperationLoading(false);
+    }
+  };
+
+  // Individual student operations (existing functions)
   const handlePromoteStudent = async (studentId: string, currentYear: number): Promise<void> => {
     try {
       setPromoteDemoteLoading(studentId);
-      
-      console.log('Promoting student:', studentId, 'Current year:', currentYear, 'Type:', typeof currentYear);
       
       // Check if student is already at maximum year
       if (currentYear >= 4) {
@@ -332,8 +630,6 @@ export default function HODRequests() {
       }
       
       const newYear = currentYear + 1;
-      
-      console.log('New year will be:', newYear);
       
       // Convert to string since the database expects text
       const newYearString = String(newYear);
@@ -648,31 +944,6 @@ export default function HODRequests() {
     }
   };
 
-  const handleUndo = async (passId: string): Promise<void> => {
-    try {
-      setProcessing(passId);
-      
-      const { error } = await supabase
-        .from('gatepasses')
-        .update({ 
-          status: 'pending',
-          qr_url: null,
-          hod_id: null
-        })
-        .eq('id', passId);
-
-      if (error) throw error;
-
-      showNotification('Gate pass status reset to pending.', 'info');
-      fetchGatePasses();
-    } catch (error: unknown) {
-      const err = error as SupabaseError;
-      showNotification('Error resetting gate pass: ' + err.message, 'error');
-    } finally {
-      setProcessing(null);
-    }
-  };
-
   const showNotification = (message: string, type: 'success' | 'error' | 'warning' | 'info'): void => {
     alert(`${type.toUpperCase()}: ${message}`);
   };
@@ -729,10 +1000,10 @@ export default function HODRequests() {
 
   if (loading && !userRole && !unauthorized) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 flex items-center justify-center">
+      <div className={`min-h-screen ${themeClasses.background} flex items-center justify-center transition-colors duration-300`}>
         <div className="text-center">
           <div className="w-16 h-16 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
-          <p className="text-gray-600">Checking authentication...</p>
+          <p className={themeClasses.text.secondary}>Checking authentication...</p>
         </div>
       </div>
     );
@@ -740,24 +1011,24 @@ export default function HODRequests() {
 
   if (unauthorized) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-red-50 to-red-100 flex items-center justify-center p-4">
+      <div className={`min-h-screen bg-gradient-to-br from-red-50 to-red-100 flex items-center justify-center p-4 transition-colors duration-300`}>
         <motion.div
           initial={{ opacity: 0, scale: 0.9 }}
           animate={{ opacity: 1, scale: 1 }}
-          className="bg-white rounded-2xl shadow-xl p-8 max-w-md w-full text-center"
+          className={`rounded-2xl shadow-xl p-8 max-w-md w-full text-center ${themeClasses.card}`}
         >
           <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
             <FiAlertCircle className="w-8 h-8 text-red-600" />
           </div>
-          <h2 className="text-2xl font-bold text-gray-900 mb-2">Access Denied</h2>
-          <p className="text-gray-600 mb-4">
+          <h2 className={`text-2xl font-bold mb-2 ${themeClasses.text.primary}`}>Access Denied</h2>
+          <p className={`mb-4 ${themeClasses.text.secondary}`}>
             {userRole === 'hod' 
               ? 'Redirecting to dashboard...' 
               : 'Please log in to access this page.'}
           </p>
-          <div className="bg-gray-100 p-3 rounded-lg mb-4 text-left">
-            <p className="text-sm text-gray-700"><strong>Debug Info:</strong> {debugInfo}</p>
-            <p className="text-sm text-gray-700"><strong>Your Role:</strong> {userRole || 'Not set'}</p>
+          <div className={`p-3 rounded-lg mb-4 text-left ${darkMode ? 'bg-gray-700' : 'bg-gray-100'}`}>
+            <p className={`text-sm ${themeClasses.text.secondary}`}><strong>Debug Info:</strong> {debugInfo}</p>
+            <p className={`text-sm ${themeClasses.text.secondary}`}><strong>Your Role:</strong> {userRole || 'Not set'}</p>
           </div>
           <div className="space-y-3">
             <button
@@ -780,22 +1051,22 @@ export default function HODRequests() {
 
   if (loading && !gatePasses.length && viewMode === 'gatepasses') {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 p-4 md:p-8">
+      <div className={`min-h-screen ${themeClasses.background} p-4 md:p-8 transition-colors duration-300`}>
         <div className="max-w-7xl mx-auto">
           <div className="animate-pulse mb-8">
-            <div className="h-8 bg-gray-300 rounded-lg w-1/3 mb-4"></div>
-            <div className="h-4 bg-gray-300 rounded w-1/2 mb-8"></div>
+            <div className={`h-8 rounded-lg w-1/3 mb-4 ${darkMode ? 'bg-gray-700' : 'bg-gray-300'}`}></div>
+            <div className={`h-4 rounded w-1/2 mb-8 ${darkMode ? 'bg-gray-700' : 'bg-gray-300'}`}></div>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
               {[...Array(3)].map((_, i) => (
-                <div key={i} className="h-32 bg-gray-200 rounded-2xl"></div>
+                <div key={i} className={`h-32 rounded-2xl ${darkMode ? 'bg-gray-700' : 'bg-gray-200'}`}></div>
               ))}
             </div>
           </div>
           <div className="animate-pulse mb-8">
-            <div className="h-10 bg-gray-300 rounded-lg w-48 mb-4"></div>
+            <div className={`h-10 rounded-lg w-48 mb-4 ${darkMode ? 'bg-gray-700' : 'bg-gray-300'}`}></div>
           </div>
           {[...Array(3)].map((_, i) => (
-            <div key={i} className="h-40 bg-gray-200 rounded-2xl mb-4"></div>
+            <div key={i} className={`h-40 rounded-2xl mb-4 ${darkMode ? 'bg-gray-700' : 'bg-gray-200'}`}></div>
           ))}
         </div>
       </div>
@@ -803,615 +1074,784 @@ export default function HODRequests() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 p-4 md:p-8">
-      <div className="max-w-7xl mx-auto">
-        
-        <motion.div
-          initial={{ opacity: 0, y: -20 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="mb-8"
-        >
-          <div className="flex flex-col md:flex-row md:items-center justify-between mb-6">
-            <div>
-              <div className="flex items-center space-x-3 mb-2">
-                <div className="w-12 h-12 bg-gradient-to-br from-blue-500 to-blue-600 rounded-xl flex items-center justify-center">
-                  <FiAward className="w-6 h-6 text-white" />
-                </div>
-                <div>
-                  <h1 className="text-3xl md:text-4xl font-bold text-gray-900">
-                    {viewMode === 'gatepasses' ? 'Gate Pass Requests' : 'Department Students'}
-                  </h1>
-                  <p className="text-gray-600 text-lg">
-                    {userDepartment ? `${userDepartment.toUpperCase()} Department - HOD Portal` : 'HOD Portal'}
-                  </p>
-                </div>
+    <div className={`min-h-screen ${themeClasses.background} transition-colors duration-300`}>
+      
+      {/* Header from code 2 */}
+      <header className={`${themeClasses.header} sticky top-0 z-50 transition-colors duration-300`}>
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="flex justify-between items-center h-16">
+            <div className="flex items-center space-x-3">
+              <div className={`w-12 h-12 rounded-lg flex items-center justify-center ${
+                darkMode ? "" : ""
+              }`}>
+                <img 
+                  src="/Logo_main.png" 
+                  alt="Logo" 
+                  className="w-18 h-18 object-contain"
+                />
+              </div>
+              <div>
+                <h1 className={`text-lg font-semibold ${themeClasses.text.primary}`}>Cabin Khojo</h1>
+                <p className={`text-xs ${themeClasses.text.muted}`}>Staff Locator System</p>
               </div>
             </div>
-            <div className="flex items-center space-x-3 mt-4 md:mt-0">
-              <div className="text-right">
-                <p className="text-sm text-gray-600">
-                  {viewMode === 'gatepasses' ? 'Assigned Requests' : 'Total Students'}
-                </p>
-                <p className="font-semibold text-gray-900">
-                  {viewMode === 'gatepasses' ? gatePasses.length : students.length} total
-                </p>
-              </div>
+            
+            <div className="flex items-center space-x-4">
               <button
-                onClick={viewMode === 'gatepasses' ? fetchGatePasses : fetchStudents}
-                disabled={loading || studentsLoading}
-                className="flex items-center space-x-2 bg-white text-gray-700 px-4 py-2 rounded-lg border border-gray-300 hover:bg-gray-50 disabled:opacity-50 transition-colors"
+                onClick={toggleDarkMode}
+                className={`p-2 rounded-lg border transition-all duration-200 ${
+                  darkMode 
+                    ? "bg-gray-700 border-gray-600 hover:bg-gray-600 text-yellow-400" 
+                    : "bg-white border-gray-300 hover:bg-gray-50 text-gray-600"
+                }`}
               >
-                <FiRefreshCw className={`w-4 h-4 ${(loading || studentsLoading) ? 'animate-spin' : ''}`} />
-                <span>Refresh</span>
-              </button>
-              <button
-                onClick={handleLogout}
-                disabled={logoutLoading}
-                className="inline-flex items-center justify-center gap-2 bg-red-600 text-white px-3 py-2 sm:px-4 sm:py-2 rounded-lg hover:bg-red-700 transition-colors shadow-lg hover:shadow-xl disabled:opacity-50 disabled:cursor-not-allowed text-sm sm:text-base"
-              >
-                <FiLogOut className="w-4 h-4 sm:w-5 sm:h-5" />
-                <span className="hidden sm:inline">
-                  {logoutLoading ? 'Logging out...' : 'Logout'}
-                </span>
-                <span className="sm:hidden">
-                  {logoutLoading ? '...' : 'Logout'}
-                </span>
+                {darkMode ? <SunIcon /> : <MoonIcon />}
               </button>
             </div>
           </div>
+        </div>
+      </header>
 
-          <div className="flex flex-wrap gap-3 mb-6">
-            <button
-              onClick={() => setViewMode('gatepasses')}
-              className={`px-4 py-2 rounded-xl font-medium transition-all duration-200 flex items-center space-x-2 ${
-                viewMode === 'gatepasses'
-                  ? 'bg-blue-600 text-white shadow-lg shadow-blue-500/25'
-                  : 'bg-white text-gray-700 border border-gray-300 hover:bg-gray-50'
-              }`}
-            >
-              <FiList className="w-4 h-4" />
-              <span>Gate Pass Requests</span>
-            </button>
-            <button
-              onClick={() => setViewMode('students')}
-              className={`px-4 py-2 rounded-xl font-medium transition-all duration-200 flex items-center space-x-2 ${
-                viewMode === 'students'
-                  ? 'bg-blue-600 text-white shadow-lg shadow-blue-500/25'
-                  : 'bg-white text-gray-700 border border-gray-300 hover:bg-gray-50'
-              }`}
-            >
-              <FiUsers className="w-4 h-4" />
-              <span>View Students</span>
-            </button>
-          </div>
-
-          {viewMode === 'gatepasses' && (
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-              {[
-                { status: 'pending', count: gatePasses.filter(p => p.status === 'pending').length },
-                { status: 'approved', count: gatePasses.filter(p => p.status === 'approved').length },
-                { status: 'rejected', count: gatePasses.filter(p => p.status === 'rejected').length }
-              ].map((stat, index) => {
-                const config = getStatusConfig(stat.status);
-                const Icon = config.icon;
-                
-                return (
-                  <motion.div
-                    key={stat.status}
-                    initial={{ opacity: 0, y: 20 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: index * 0.1 }}
-                    className="bg-white rounded-2xl shadow-sm border p-6 hover:shadow-md transition-shadow"
-                  >
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <p className="text-sm font-medium text-gray-600">{config.label}</p>
-                        <p className="text-3xl font-bold text-gray-900 mt-2">{stat.count}</p>
-                        <p className="text-xs text-gray-500 mt-1">Assigned to you</p>
-                      </div>
-                      <div className={`p-3 rounded-xl ${config.color.replace('bg-', 'bg-').split(' ')[0]}`}>
-                        <Icon className="w-6 h-6" />
-                      </div>
-                    </div>
-                  </motion.div>
-                );
-              })}
-            </div>
-          )}
-
-          {viewMode === 'students' && (
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
-              <motion.div
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                className="bg-white rounded-2xl shadow-sm border p-6 hover:shadow-md transition-shadow"
-              >
-                <div className="flex items-center justify-between">
+      <div className="p-4 md:p-8">
+        <div className="max-w-7xl mx-auto">
+          
+          <motion.div
+            initial={{ opacity: 0, y: -20 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="mb-8"
+          >
+            <div className="flex flex-col md:flex-row md:items-center justify-between mb-6">
+              <div>
+                <div className="flex items-center space-x-3 mb-2">
+                  <div className="w-12 h-12 bg-gradient-to-br from-blue-500 to-blue-600 rounded-xl flex items-center justify-center">
+                    <FiAward className="w-6 h-6 text-white" />
+                  </div>
                   <div>
-                    <p className="text-sm font-medium text-gray-600">Total Students</p>
-                    <p className="text-3xl font-bold text-gray-900 mt-2">{students.length}</p>
-                    <p className="text-xs text-gray-500 mt-1">All Years</p>
-                  </div>
-                  <div className="p-3 rounded-xl bg-blue-100 text-blue-600">
-                    <FiUsers className="w-6 h-6" />
+                    <h1 className={`text-3xl md:text-4xl font-bold ${themeClasses.text.primary}`}>
+                      {viewMode === 'gatepasses' ? 'Gate Pass Requests' : 'Department Students'}
+                    </h1>
+                    <p className={`text-lg ${themeClasses.text.secondary}`}>
+                      {userDepartment ? `${userDepartment.toUpperCase()} Department - HOD Portal` : 'HOD Portal'}
+                    </p>
                   </div>
                 </div>
-                <button
-                  onClick={() => exportToExcel('all')}
-                  disabled={exportLoading !== null || students.length === 0}
-                  className="w-full flex items-center justify-center space-x-2 bg-blue-600 text-white py-2 px-4 rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-colors text-sm mt-4"
-                >
-                  {exportLoading === 'all' ? (
-                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                  ) : (
-                    <FiDownload className="w-4 h-4" />
-                  )}
-                  <span>Export All</span>
-                </button>
-              </motion.div>
-              
-              {availableYears.map((year, index) => {
-                const batchStudents = students.filter(s => s.year === year);
-                return (
-                  <motion.div
-                    key={year}
-                    initial={{ opacity: 0, y: 20 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: (index + 1) * 0.1 }}
-                    className="bg-white rounded-2xl shadow-sm border p-6 hover:shadow-md transition-shadow"
-                  >
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <p className="text-sm font-medium text-gray-600">Batch {year}</p>
-                        <p className="text-3xl font-bold text-gray-900 mt-2">
-                          {batchStudents.length}
-                        </p>
-                        <p className="text-xs text-gray-500 mt-1">Students</p>
-                      </div>
-                      <div className="p-3 rounded-xl bg-green-100 text-green-600">
-                        <FiUser className="w-6 h-6" />
-                      </div>
-                    </div>
-                    <button
-                      onClick={() => exportToExcel(year)}
-                      disabled={exportLoading !== null || batchStudents.length === 0}
-                      className="w-full flex items-center justify-center space-x-2 bg-green-600 text-white py-2 px-4 rounded-lg hover:bg-green-700 disabled:opacity-50 transition-colors text-sm mt-4"
-                    >
-                      {exportLoading === year ? (
-                        <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                      ) : (
-                        <FiDownload className="w-4 h-4" />
-                      )}
-                      <span>Export Batch</span>
-                    </button>
-                  </motion.div>
-                );
-              })}
-            </div>
-          )}
-        </motion.div>
-
-        {viewMode === 'gatepasses' && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            transition={{ delay: 0.2 }}
-            className="mb-8"
-          >
-            <div className="flex flex-wrap gap-3 items-center">
-              <div className="flex items-center space-x-2 text-gray-600 mr-4">
-                <FiFilter className="w-4 h-4" />
-                <span className="text-sm font-medium">Filter by status:</span>
               </div>
-              {(['all', 'pending', 'approved', 'rejected'] as const).map((filterType) => (
-                <button
-                  key={filterType}
-                  onClick={() => setFilter(filterType)}
-                  className={`px-4 py-2 rounded-xl font-medium transition-all duration-200 flex items-center space-x-2 ${
-                    filter === filterType
-                      ? 'bg-blue-600 text-white shadow-lg shadow-blue-500/25'
-                      : 'bg-white text-gray-700 border border-gray-300 hover:bg-gray-50 hover:border-gray-400'
-                  }`}
-                >
-                  <span>{filterType.charAt(0).toUpperCase() + filterType.slice(1)}</span>
-                  {filterType !== 'all' && (
-                    <span className="px-2 py-1 text-xs bg-white/20 rounded-full">
-                      {gatePasses.filter(p => p.status === filterType).length}
-                    </span>
-                  )}
-                </button>
-              ))}
-            </div>
-          </motion.div>
-        )}
-
-        {viewMode === 'students' && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            transition={{ delay: 0.2 }}
-            className="mb-8"
-          >
-            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
-              <div className="flex flex-wrap gap-3 items-center">
-                <div className="flex items-center space-x-2 text-gray-600 mr-4">
-                  <FiFilter className="w-4 h-4" />
-                  <span className="text-sm font-medium">Filter by year:</span>
+              <div className="flex items-center space-x-3 mt-4 md:mt-0">
+                <div className="text-right">
+                  <p className={`text-sm ${themeClasses.text.secondary}`}>
+                    {viewMode === 'gatepasses' ? 'Assigned Requests' : 'Total Students'}
+                  </p>
+                  <p className={`font-semibold ${themeClasses.text.primary}`}>
+                    {viewMode === 'gatepasses' ? gatePasses.length : students.length} total
+                  </p>
                 </div>
                 <button
-                  onClick={() => setSelectedYear('all')}
-                  className={`px-4 py-2 rounded-xl font-medium transition-all duration-200 flex items-center space-x-2 ${
-                    selectedYear === 'all'
-                      ? 'bg-blue-600 text-white shadow-lg shadow-blue-500/25'
-                      : 'bg-white text-gray-700 border border-gray-300 hover:bg-gray-50 hover:border-gray-400'
-                  }`}
+                  onClick={viewMode === 'gatepasses' ? fetchGatePasses : fetchStudents}
+                  disabled={loading || studentsLoading}
+                  className={`flex items-center space-x-2 px-4 py-2 rounded-lg border transition-colors disabled:opacity-50 ${themeClasses.button.secondary}`}
                 >
-                  <span>All Years</span>
-                  <span className="px-2 py-1 text-xs bg-white/20 rounded-full">
-                    {students.length}
-                  </span>
+                  <FiRefreshCw className={`w-4 h-4 ${(loading || studentsLoading) ? 'animate-spin' : ''}`} />
+                  <span>Refresh</span>
                 </button>
-                {availableYears.map((year) => (
-                  <button
-                    key={year}
-                    onClick={() => setSelectedYear(year)}
-                    className={`px-4 py-2 rounded-xl font-medium transition-all duration-200 flex items-center space-x-2 ${
-                      selectedYear === year
-                        ? 'bg-blue-600 text-white shadow-lg shadow-blue-500/25'
-                        : 'bg-white text-gray-700 border border-gray-300 hover:bg-gray-50 hover:border-gray-400'
-                    }`}
-                  >
-                    <span>Batch {year}</span>
-                    <span className="px-2 py-1 text-xs bg-white/20 rounded-full">
-                      {students.filter(s => s.year === year).length}
-                    </span>
-                  </button>
-                ))}
-              </div>
-              
-              {/* Export Buttons */}
-              <div className="flex flex-wrap gap-3">
-                {/* Export Current View Button */}
                 <button
-                  onClick={() => exportToExcel(selectedYear)}
-                  disabled={exportLoading !== null || filteredStudents.length === 0}
-                  className="flex items-center space-x-2 bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 disabled:opacity-50 transition-colors"
+                  onClick={handleLogout}
+                  disabled={logoutLoading}
+                  className="inline-flex items-center justify-center gap-2 bg-red-600 text-white px-3 py-2 sm:px-4 sm:py-2 rounded-lg hover:bg-red-700 transition-colors shadow-lg hover:shadow-xl disabled:opacity-50 disabled:cursor-not-allowed text-sm sm:text-base"
                 >
-                  {exportLoading === selectedYear ? (
-                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                  ) : (
-                    <FiFileText className="w-4 h-4" />
-                  )}
-                  <span>
-                    {selectedYear === 'all' 
-                      ? `Export All (${filteredStudents.length})`
-                      : `Export Batch ${selectedYear} (${filteredStudents.length})`
-                    }
+                  <FiLogOut className="w-4 h-4 sm:w-5 sm:h-5" />
+                  <span className="hidden sm:inline">
+                    {logoutLoading ? 'Logging out...' : 'Logout'}
                   </span>
-                </button>
-
-                {/* Export All Batches Button */}
-                <button
-                  onClick={exportAllBatches}
-                  disabled={exportLoading !== null || students.length === 0}
-                  className="flex items-center space-x-2 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-colors"
-                >
-                  {exportLoading === 'all' ? (
-                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                  ) : (
-                    <FiDownload className="w-4 h-4" />
-                  )}
-                  <span>Export All Batches ({students.length})</span>
+                  <span className="sm:hidden">
+                    {logoutLoading ? '...' : 'Logout'}
+                  </span>
                 </button>
               </div>
             </div>
-          </motion.div>
-        )}
 
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          transition={{ delay: 0.3 }}
-          className="bg-white rounded-2xl shadow-sm border overflow-hidden"
-        >
-          <AnimatePresence mode="wait">
-            {viewMode === 'gatepasses' ? (
-              filteredPasses.length === 0 ? (
-                <motion.div
-                  key="empty-gatepasses"
-                  initial={{ opacity: 0, scale: 0.9 }}
-                  animate={{ opacity: 1, scale: 1 }}
-                  exit={{ opacity: 0, scale: 0.9 }}
-                  className="text-center py-16"
-                >
-                  <div className="w-24 h-24 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                    <FiMessageSquare className="w-10 h-10 text-gray-400" />
-                  </div>
-                  <h3 className="text-xl font-semibold text-gray-900 mb-2">
-                    No gate pass requests found
-                  </h3>
-                  <p className="text-gray-500 max-w-sm mx-auto mb-4">
-                    {gatePasses.length === 0 
-                      ? "No gate pass requests found for your department. Check the debug panel above for details."
-                      : "No gate passes match the current filter."
-                    }
-                  </p>
-                  <div className="space-y-3">
-                    <button
-                      onClick={fetchGatePasses}
-                      className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors"
-                    >
-                      Check Again
-                    </button>
-                    <button
-                      onClick={() => setFilter('all')}
-                      className="bg-gray-600 text-white px-4 py-2 rounded-lg hover:bg-gray-700 transition-colors ml-2"
-                    >
-                      Show All
-                    </button>
-                  </div>
-                </motion.div>
-              ) : (
-                <motion.ul
-                  key="gatepass-list"
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  className="divide-y divide-gray-200"
-                >
-                  {filteredPasses.map((pass, index) => {
-                    const statusConfig = getStatusConfig(pass.status);
-                    const StatusIcon = statusConfig.icon;
-                    const student = pass.student;
-                    
-                    return (
-                      <motion.li
-                        key={pass.id}
-                        initial={{ opacity: 0, y: 20 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        transition={{ delay: index * 0.1 }}
-                        className="hover:bg-gray-50 transition-colors duration-200"
-                      >
-                        <div className="p-6">
-                          <div className="flex flex-col lg:flex-row lg:items-start justify-between gap-6">
-                            <div className="flex-1 min-w-0">
-                              <div className="flex items-start justify-between mb-4">
-                                <div className="flex items-center space-x-3">
-                                  <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-blue-600 rounded-full flex items-center justify-center">
-                                    <FiUser className="w-5 h-5 text-white" />
-                                  </div>
-                                  <div>
-                                    <h3 className="text-lg font-semibold text-gray-900">
-                                      {student?.name || 'Unknown Student'}
-                                    </h3>
-                                    <p className="text-gray-500 text-sm">
-                                      Roll No: {student?.roll || 'N/A'} | Year: {student?.year || 'N/A'}
-                                    </p>
-                                  </div>
-                                </div>
-                                <div className={`flex items-center space-x-2 px-3 py-1 rounded-full border ${statusConfig.color}`}>
-                                  <StatusIcon className="w-4 h-4" />
-                                  <span className="text-sm font-medium">{statusConfig.label}</span>
-                                </div>
-                              </div>
+            <div className="flex flex-wrap gap-3 mb-6">
+              <button
+                onClick={() => setViewMode('gatepasses')}
+                className={`px-4 py-2 rounded-xl font-medium transition-all duration-200 flex items-center space-x-2 ${
+                  viewMode === 'gatepasses'
+                    ? 'bg-blue-600 text-white shadow-lg shadow-blue-500/25'
+                    : `${themeClasses.button.secondary}`
+                }`}
+              >
+                <FiList className="w-4 h-4" />
+                <span>Gate Pass Requests</span>
+              </button>
+              <button
+                onClick={() => setViewMode('students')}
+                className={`px-4 py-2 rounded-xl font-medium transition-all duration-200 flex items-center space-x-2 ${
+                  viewMode === 'students'
+                    ? 'bg-blue-600 text-white shadow-lg shadow-blue-500/25'
+                    : `${themeClasses.button.secondary}`
+                }`}
+              >
+                <FiUsers className="w-4 h-4" />
+                <span>View Students</span>
+              </button>
+            </div>
 
-                              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
-                                <div className="flex items-center space-x-2 text-gray-600">
-                                  <FiBook className="w-4 h-4" />
-                                  <span className="text-sm">Roll: <strong className="text-gray-900">{student?.roll || 'N/A'}</strong></span>
-                                </div>
-                                <div className="flex items-center space-x-2 text-gray-600">
-                                  <FiBook className="w-4 h-4" />
-                                  <span className="text-sm">Year: <strong className="text-gray-900">{student?.year || 'N/A'}</strong></span>
-                                </div>
-                                <div className="flex items-center space-x-2 text-gray-600">
-                                  <FiCalendar className="w-4 h-4" />
-                                  <span className="text-sm">Date: <strong className="text-gray-900">{new Date(pass.date).toLocaleDateString()}</strong></span>
-                                </div>
-                                <div className="flex items-center space-x-2 text-gray-600">
-                                  <FiHash className="w-4 h-4" />
-                                  <span className="text-sm">ID: <strong className="text-gray-900 font-mono text-xs">{pass.id}</strong></span>
-                                </div>
-                              </div>
-
-                              <div className="mb-4">
-                                <p className="text-sm font-medium text-gray-700 mb-2">Reason for Request:</p>
-                                <p className="text-gray-900 bg-gray-50 rounded-lg p-3 border">{pass.reason}</p>
-                              </div>
-
-                              <div className="flex flex-wrap gap-4 text-xs text-gray-500">
-                                <span>Submitted: {new Date(pass.created_at).toLocaleString()}</span>
-                              </div>
-
-                              {pass.qr_url && (
-                                <div className="mt-4 p-3 bg-green-50 border border-green-200 rounded-lg">
-                                  <div className="flex items-center justify-between">
-                                    <div className="flex items-center space-x-2 text-green-800">
-                                      <FiCheckCircle className="w-4 h-4" />
-                                      <span className="text-sm font-medium">QR Code Generated</span>
-                                    </div>
-                                    <button
-                                      onClick={() => downloadQRCode(pass.qr_url!, student?.name)}
-                                      className="flex items-center space-x-1 text-green-700 hover:text-green-800 text-sm font-medium px-3 py-1 rounded-lg bg-green-100 hover:bg-green-200 transition-colors"
-                                    >
-                                      <FiDownload className="w-3 h-3" />
-                                      <span>Download</span>
-                                    </button>
-                                  </div>
-                                </div>
-                              )}
-                            </div>
-
-                            <div className="flex flex-col space-y-3 min-w-[140px]">
-                              {pass.status === 'pending' && (
-                                <>
-                                  <motion.button
-                                    whileHover={{ scale: 1.02 }}
-                                    whileTap={{ scale: 0.98 }}
-                                    onClick={() => handleApprove(pass.id, pass.student_id)}
-                                    disabled={processing === pass.id}
-                                    className="bg-green-600 text-white px-4 py-3 rounded-xl text-sm font-medium hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors shadow-lg shadow-green-500/25"
-                                  >
-                                    {processing === pass.id ? (
-                                      <div className="flex items-center justify-center space-x-2">
-                                        <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                                        <span>Approving...</span>
-                                      </div>
-                                    ) : (
-                                      'Approve Request'
-                                    )}
-                                  </motion.button>
-                                  <motion.button
-                                    whileHover={{ scale: 1.02 }}
-                                    whileTap={{ scale: 0.98 }}
-                                    onClick={() => handleReject(pass.id)}
-                                    disabled={processing === pass.id}
-                                    className="bg-red-600 text-white px-4 py-3 rounded-xl text-sm font-medium hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                                  >
-                                    {processing === pass.id ? 'Rejecting...' : 'Reject Request'}
-                                  </motion.button>
-                                </>
-                              )}
-                              
-                              {(pass.status === 'approved' || pass.status === 'rejected') && (
-                                <motion.button
-                                  whileHover={{ scale: 1.02 }}
-                                  whileTap={{ scale: 0.98 }}
-                                  onClick={() => handleUndo(pass.id)}
-                                  disabled={processing === pass.id}
-                                  className="bg-gray-600 text-white px-4 py-3 rounded-xl text-sm font-medium hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                                >
-                                  {processing === pass.id ? 'Resetting...' : 'Reset to Pending'}
-                                </motion.button>
-                              )}
-                            </div>
-                          </div>
-                        </div>
-                      </motion.li>
-                    );
-                  })}
-                </motion.ul>
-              )
-            ) : (
-              filteredStudents.length === 0 ? (
-                <motion.div
-                  key="empty-students"
-                  initial={{ opacity: 0, scale: 0.9 }}
-                  animate={{ opacity: 1, scale: 1 }}
-                  exit={{ opacity: 0, scale: 0.9 }}
-                  className="text-center py-16"
-                >
-                  <div className="w-24 h-24 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                    <FiUsers className="w-10 h-10 text-gray-400" />
-                  </div>
-                  <h3 className="text-xl font-semibold text-gray-900 mb-2">
-                    No students found
-                  </h3>
-                  <p className="text-gray-500 max-w-sm mx-auto mb-4">
-                    {studentsLoading 
-                      ? "Loading students..."
-                      : "No students found in your department."
-                    }
-                  </p>
-                  <div className="space-y-3">
-                    <button
-                      onClick={fetchStudents}
-                      className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors"
-                    >
-                      {studentsLoading ? 'Loading...' : 'Refresh Students'}
-                    </button>
-                  </div>
-                </motion.div>
-              ) : (
-                <motion.div
-                  key="students-list"
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  className="divide-y divide-gray-200"
-                >
-                  {filteredStudents.map((student, index) => (
+            {viewMode === 'gatepasses' && (
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+                {[
+                  { status: 'pending', count: gatePasses.filter(p => p.status === 'pending').length },
+                  { status: 'approved', count: gatePasses.filter(p => p.status === 'approved').length },
+                  { status: 'rejected', count: gatePasses.filter(p => p.status === 'rejected').length }
+                ].map((stat, index) => {
+                  const config = getStatusConfig(stat.status);
+                  const Icon = config.icon;
+                  
+                  return (
                     <motion.div
-                      key={student.id}
+                      key={stat.status}
                       initial={{ opacity: 0, y: 20 }}
                       animate={{ opacity: 1, y: 0 }}
                       transition={{ delay: index * 0.1 }}
-                      className="hover:bg-gray-50 transition-colors duration-200 p-6"
+                      className={`rounded-2xl shadow-sm border p-6 hover:shadow-md transition-shadow ${themeClasses.card}`}
                     >
                       <div className="flex items-center justify-between">
-                        <div className="flex items-center space-x-4">
-                          <div className="w-12 h-12 bg-gradient-to-br from-blue-500 to-blue-600 rounded-full flex items-center justify-center">
-                            <FiUser className="w-6 h-6 text-white" />
-                          </div>
-                          <div>
-                            <h3 className="text-lg font-semibold text-gray-900">
-                              {student.name}
-                            </h3>
-                            <div className="flex flex-wrap gap-4 mt-1 text-sm text-gray-600">
-                              <span className="flex items-center space-x-1">
-                                <FiBook className="w-4 h-4" />
-                                <span>Roll: <strong>{student.roll}</strong></span>
-                              </span>
-                              <span className="flex items-center space-x-1">
-                                <FiCalendar className="w-4 h-4" />
-                                <span>Year: <strong>{student.year}</strong></span>
-                              </span>
-                              <span className="flex items-center space-x-1">
-                                <FiHash className="w-4 h-4" />
-                                <span>ID: <strong className="font-mono text-xs">{student.id}</strong></span>
-                              </span>
-                            </div>
-                          </div>
+                        <div>
+                          <p className={`text-sm font-medium ${themeClasses.text.secondary}`}>{config.label}</p>
+                          <p className={`text-3xl font-bold mt-2 ${themeClasses.text.primary}`}>{stat.count}</p>
+                          <p className={`text-xs mt-1 ${themeClasses.text.muted}`}>Assigned to you</p>
                         </div>
-                        <div className="flex items-center space-x-3">
-                          <div className="text-right mr-4">
-                            <div className="text-sm text-gray-500">
-                              Joined: {new Date(student.created_at).toLocaleDateString()}
-                            </div>
-                            <div className="text-lg font-bold text-blue-600">
-                              Year {student.year}
-                            </div>
-                          </div>
-                          <div className="flex flex-col space-y-2">
-                            <motion.button
-                              whileHover={{ scale: 1.05 }}
-                              whileTap={{ scale: 0.95 }}
-                              onClick={() => handlePromoteStudent(student.id, student.year)}
-                              disabled={promoteDemoteLoading === student.id}
-                              className="flex items-center space-x-2 bg-green-600 text-white px-3 py-2 rounded-lg text-sm font-medium hover:bg-green-700 disabled:opacity-50 transition-colors"
-                              title="Promote to next year"
-                            >
-                              {promoteDemoteLoading === student.id ? (
-                                <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                              ) : (
-                                <FiArrowUp className="w-4 h-4" />
-                              )}
-                              <span>Promote</span>
-                            </motion.button>
-                            <motion.button
-                              whileHover={{ scale: 1.05 }}
-                              whileTap={{ scale: 0.95 }}
-                              onClick={() => handleDemoteStudent(student.id, student.year)}
-                              disabled={promoteDemoteLoading === student.id || student.year <= 1}
-                              className="flex items-center space-x-2 bg-orange-600 text-white px-3 py-2 rounded-lg text-sm font-medium hover:bg-orange-700 disabled:opacity-50 transition-colors"
-                              title="Demote to previous year"
-                            >
-                              {promoteDemoteLoading === student.id ? (
-                                <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                              ) : (
-                                <FiArrowDown className="w-4 h-4" />
-                              )}
-                              <span>Demote</span>
-                            </motion.button>
-                          </div>
+                        <div className={`p-3 rounded-xl ${config.color.replace('bg-', 'bg-').split(' ')[0]}`}>
+                          <Icon className="w-6 h-6" />
                         </div>
                       </div>
                     </motion.div>
-                  ))}
-                </motion.div>
-              )
+                  );
+                })}
+              </div>
             )}
-          </AnimatePresence>
-        </motion.div>
+
+            {viewMode === 'students' && (
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
+                <motion.div
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className={`rounded-2xl shadow-sm border p-6 hover:shadow-md transition-shadow ${themeClasses.card}`}
+                >
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className={`text-sm font-medium ${themeClasses.text.secondary}`}>Total Students</p>
+                      <p className={`text-3xl font-bold mt-2 ${themeClasses.text.primary}`}>{students.length}</p>
+                      <p className={`text-xs mt-1 ${themeClasses.text.muted}`}>All Years</p>
+                    </div>
+                    <div className="p-3 rounded-xl bg-blue-100 text-blue-600">
+                      <FiUsers className="w-6 h-6" />
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => exportToExcel('all')}
+                    disabled={exportLoading !== null || students.length === 0}
+                    className="w-full flex items-center justify-center space-x-2 bg-blue-600 text-white py-2 px-4 rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-colors text-sm mt-4"
+                  >
+                    {exportLoading === 'all' ? (
+                      <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                    ) : (
+                      <FiDownload className="w-4 h-4" />
+                    )}
+                    <span>Export All</span>
+                  </button>
+                </motion.div>
+                
+                {availableYears.map((year, index) => {
+                  const batchStudents = students.filter(s => s.year === year);
+                  return (
+                    <motion.div
+                      key={year}
+                      initial={{ opacity: 0, y: 20 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ delay: (index + 1) * 0.1 }}
+                      className={`rounded-2xl shadow-sm border p-6 hover:shadow-md transition-shadow ${themeClasses.card}`}
+                    >
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <p className={`text-sm font-medium ${themeClasses.text.secondary}`}>Year {year}</p>
+                          <p className={`text-3xl font-bold mt-2 ${themeClasses.text.primary}`}>
+                            {batchStudents.length}
+                          </p>
+                          <p className={`text-xs mt-1 ${themeClasses.text.muted}`}>Students</p>
+                        </div>
+                        <div className="p-3 rounded-xl bg-green-100 text-green-600">
+                          <FiUser className="w-6 h-6" />
+                        </div>
+                      </div>
+                      <div className="flex flex-col space-y-2 mt-4">
+                        <button
+                          onClick={() => exportToExcel(year)}
+                          disabled={exportLoading !== null || batchStudents.length === 0}
+                          className="w-full flex items-center justify-center space-x-2 bg-green-600 text-white py-2 px-4 rounded-lg hover:bg-green-700 disabled:opacity-50 transition-colors text-sm"
+                        >
+                          {exportLoading === year ? (
+                            <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                          ) : (
+                            <FiDownload className="w-4 h-4" />
+                          )}
+                          <span>Export Batch</span>
+                        </button>
+                        <div className="flex space-x-2">
+                          <button
+                            onClick={() => handlePromoteFullBatch(year)}
+                            disabled={batchOperationLoading || batchStudents.length === 0 || year >= 4}
+                            className="flex-1 flex items-center justify-center space-x-1 bg-blue-600 text-white py-2 px-3 rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-colors text-xs"
+                            title="Promote entire batch"
+                          >
+                            <FiArrowUp className="w-3 h-3" />
+                            <span>Promote</span>
+                          </button>
+                          <button
+                            onClick={() => handleDemoteFullBatch(year)}
+                            disabled={batchOperationLoading || batchStudents.length === 0 || year <= 1}
+                            className="flex-1 flex items-center justify-center space-x-1 bg-orange-600 text-white py-2 px-3 rounded-lg hover:bg-orange-700 disabled:opacity-50 transition-colors text-xs"
+                            title="Demote entire batch"
+                          >
+                            <FiArrowDown className="w-3 h-3" />
+                            <span>Demote</span>
+                          </button>
+                        </div>
+                      </div>
+                    </motion.div>
+                  );
+                })}
+              </div>
+            )}
+          </motion.div>
+
+          {viewMode === 'gatepasses' && (
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ delay: 0.2 }}
+              className="mb-8"
+            >
+              <div className="flex flex-wrap gap-3 items-center">
+                <div className={`flex items-center space-x-2 mr-4 ${themeClasses.text.secondary}`}>
+                  <FiFilter className="w-4 h-4" />
+                  <span className="text-sm font-medium">Filter by status:</span>
+                </div>
+                {(['all', 'pending', 'approved', 'rejected'] as const).map((filterType) => (
+                  <button
+                    key={filterType}
+                    onClick={() => setFilter(filterType)}
+                    className={`px-4 py-2 rounded-xl font-medium transition-all duration-200 flex items-center space-x-2 ${
+                      filter === filterType
+                        ? 'bg-blue-600 text-white shadow-lg shadow-blue-500/25'
+                        : `${themeClasses.button.secondary}`
+                    }`}
+                  >
+                    <span>{filterType.charAt(0).toUpperCase() + filterType.slice(1)}</span>
+                    {filterType !== 'all' && (
+                      <span className="px-2 py-1 text-xs bg-white/20 rounded-full">
+                        {gatePasses.filter(p => p.status === filterType).length}
+                      </span>
+                    )}
+                  </button>
+                ))}
+              </div>
+            </motion.div>
+          )}
+
+          {viewMode === 'students' && (
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ delay: 0.2 }}
+              className="mb-8"
+            >
+              <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
+                <div className="flex flex-wrap gap-3 items-center">
+                  <div className={`flex items-center space-x-2 mr-4 ${themeClasses.text.secondary}`}>
+                    <FiFilter className="w-4 h-4" />
+                    <span className="text-sm font-medium">Filter by year:</span>
+                  </div>
+                  <button
+                    onClick={() => setSelectedYear('all')}
+                    className={`px-4 py-2 rounded-xl font-medium transition-all duration-200 flex items-center space-x-2 ${
+                      selectedYear === 'all'
+                        ? 'bg-blue-600 text-white shadow-lg shadow-blue-500/25'
+                        : `${themeClasses.button.secondary}`
+                    }`}
+                  >
+                    <span>All Years</span>
+                    <span className="px-2 py-1 text-xs bg-white/20 rounded-full">
+                      {students.length}
+                    </span>
+                  </button>
+                  {availableYears.map((year) => (
+                    <button
+                      key={year}
+                      onClick={() => setSelectedYear(year)}
+                      className={`px-4 py-2 rounded-xl font-medium transition-all duration-200 flex items-center space-x-2 ${
+                        selectedYear === year
+                          ? 'bg-blue-600 text-white shadow-lg shadow-blue-500/25'
+                          : `${themeClasses.button.secondary}`
+                      }`}
+                    >
+                      <span>Year {year}</span>
+                      <span className="px-2 py-1 text-xs bg-white/20 rounded-full">
+                        {students.filter(s => s.year === year).length}
+                      </span>
+                    </button>
+                  ))}
+                </div>
+                
+                {/* Batch Operation Buttons */}
+                {selectedStudents.size > 0 && (
+                  <div className="flex flex-wrap gap-3">
+                    <button
+                      onClick={handleBatchPromote}
+                      disabled={batchOperationLoading}
+                      className="flex items-center space-x-2 bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 disabled:opacity-50 transition-colors"
+                    >
+                      {batchOperationLoading ? (
+                        <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                      ) : (
+                        <FiArrowUp className="w-4 h-4" />
+                      )}
+                      <span>Promote Selected ({selectedStudents.size})</span>
+                    </button>
+                    <button
+                      onClick={handleBatchDemote}
+                      disabled={batchOperationLoading}
+                      className="flex items-center space-x-2 bg-orange-600 text-white px-4 py-2 rounded-lg hover:bg-orange-700 disabled:opacity-50 transition-colors"
+                    >
+                      {batchOperationLoading ? (
+                        <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                      ) : (
+                        <FiArrowDown className="w-4 h-4" />
+                      )}
+                      <span>Demote Selected ({selectedStudents.size})</span>
+                    </button>
+                  </div>
+                )}
+
+                {/* Export Buttons */}
+                <div className="flex flex-wrap gap-3">
+                  {/* Export Current View Button */}
+                  <button
+                    onClick={() => exportToExcel(selectedYear)}
+                    disabled={exportLoading !== null || filteredStudents.length === 0}
+                    className="flex items-center space-x-2 bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 disabled:opacity-50 transition-colors"
+                  >
+                    {exportLoading === selectedYear ? (
+                      <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                    ) : (
+                      <FiFileText className="w-4 h-4" />
+                    )}
+                    <span>
+                      {selectedYear === 'all' 
+                        ? `Export All (${filteredStudents.length})`
+                        : `Export Batch ${selectedYear} (${filteredStudents.length})`
+                      }
+                    </span>
+                  </button>
+
+                  {/* Export All Batches Button */}
+                  
+                </div>
+              </div>
+
+              {/* Selection Info */}
+              {selectedStudents.size > 0 && (
+                <motion.div
+                  initial={{ opacity: 0, y: -10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className={`p-4 rounded-lg mb-4 ${
+                    darkMode ? 'bg-blue-900 border border-blue-700' : 'bg-blue-50 border border-blue-200'
+                  }`}
+                >
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center space-x-2">
+                      <FiUsers className="w-5 h-5 text-blue-600" />
+                      <span className={`font-medium ${darkMode ? 'text-blue-300' : 'text-blue-800'}`}>
+                        {selectedStudents.size} student(s) selected
+                      </span>
+                    </div>
+                    <button
+                      onClick={() => setSelectedStudents(new Set())}
+                      className="text-sm text-blue-600 hover:text-blue-800 font-medium"
+                    >
+                      Clear Selection
+                    </button>
+                  </div>
+                </motion.div>
+              )}
+            </motion.div>
+          )}
+
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ delay: 0.3 }}
+            className={`rounded-2xl shadow-sm border overflow-hidden ${themeClasses.card}`}
+          >
+            <AnimatePresence mode="wait">
+              {viewMode === 'gatepasses' ? (
+                filteredPasses.length === 0 ? (
+                  <motion.div
+                    key="empty-gatepasses"
+                    initial={{ opacity: 0, scale: 0.9 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    exit={{ opacity: 0, scale: 0.9 }}
+                    className="text-center py-16"
+                  >
+                    <div className="w-24 h-24 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                      <FiMessageSquare className="w-10 h-10 text-gray-400" />
+                    </div>
+                    <h3 className={`text-xl font-semibold mb-2 ${themeClasses.text.primary}`}>
+                      No gate pass requests found
+                    </h3>
+                    <p className={`max-w-sm mx-auto mb-4 ${themeClasses.text.secondary}`}>
+                      {gatePasses.length === 0 
+                        ? "No gate pass requests found for your department. Check the debug panel above for details."
+                        : "No gate passes match the current filter."
+                      }
+                    </p>
+                    <div className="space-y-3">
+                      <button
+                        onClick={fetchGatePasses}
+                        className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors"
+                      >
+                        Check Again
+                      </button>
+                      <button
+                        onClick={() => setFilter('all')}
+                        className="bg-gray-600 text-white px-4 py-2 rounded-lg hover:bg-gray-700 transition-colors ml-2"
+                      >
+                        Show All
+                      </button>
+                    </div>
+                  </motion.div>
+                ) : (
+                  <motion.ul
+                    key="gatepass-list"
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    className="divide-y divide-gray-200"
+                  >
+                    {filteredPasses.map((pass, index) => {
+                      const statusConfig = getStatusConfig(pass.status);
+                      const StatusIcon = statusConfig.icon;
+                      const student = pass.student;
+                      
+                      return (
+                        <motion.li
+                          key={pass.id}
+                          initial={{ opacity: 0, y: 20 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          transition={{ delay: index * 0.1 }}
+                          className="hover:bg-gray-50 transition-colors duration-200"
+                        >
+                          <div className="p-6">
+                            <div className="flex flex-col lg:flex-row lg:items-start justify-between gap-6">
+                              <div className="flex-1 min-w-0">
+                                <div className="flex items-start justify-between mb-4">
+                                  <div className="flex items-center space-x-3">
+                                    <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-blue-600 rounded-full flex items-center justify-center">
+                                      <FiUser className="w-5 h-5 text-white" />
+                                    </div>
+                                    <div>
+                                      <h3 className={`text-lg font-semibold ${themeClasses.text.primary}`}>
+                                        {student?.name || 'Unknown Student'}
+                                      </h3>
+                                      <p className={`text-sm ${themeClasses.text.secondary}`}>
+                                        Roll No: {student?.roll || 'N/A'} | Year: {student?.year || 'N/A'}
+                                      </p>
+                                    </div>
+                                  </div>
+                                  <div className={`flex items-center space-x-2 px-3 py-1 rounded-full border ${statusConfig.color}`}>
+                                    <StatusIcon className="w-4 h-4" />
+                                    <span className="text-sm font-medium">{statusConfig.label}</span>
+                                  </div>
+                                </div>
+
+                                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
+                                  <div className={`flex items-center space-x-2 ${themeClasses.text.secondary}`}>
+                                    <FiBook className="w-4 h-4" />
+                                    <span className="text-sm">Roll: <strong className={themeClasses.text.primary}>{student?.roll || 'N/A'}</strong></span>
+                                  </div>
+                                  <div className={`flex items-center space-x-2 ${themeClasses.text.secondary}`}>
+                                    <FiBook className="w-4 h-4" />
+                                    <span className="text-sm">Year: <strong className={themeClasses.text.primary}>{student?.year || 'N/A'}</strong></span>
+                                  </div>
+                                  <div className={`flex items-center space-x-2 ${themeClasses.text.secondary}`}>
+                                    <FiCalendar className="w-4 h-4" />
+                                    <span className="text-sm">Date: <strong className={themeClasses.text.primary}>{new Date(pass.date).toLocaleDateString()}</strong></span>
+                                  </div>
+                                  <div className={`flex items-center space-x-2 ${themeClasses.text.secondary}`}>
+                                    <FiHash className="w-4 h-4" />
+                                    <span className="text-sm">ID: <strong className={`font-mono text-xs ${themeClasses.text.primary}`}>{pass.id}</strong></span>
+                                  </div>
+                                </div>
+
+                                <div className="mb-4">
+                                  <p className={`text-sm font-medium mb-2 ${themeClasses.text.secondary}`}>Reason for Request:</p>
+                                  <p className={`rounded-lg p-3 border ${darkMode ? 'bg-gray-700 text-white' : 'bg-gray-50 text-gray-900'}`}>{pass.reason}</p>
+                                </div>
+
+                                <div className="flex flex-wrap gap-4 text-xs text-gray-500">
+                                  <span>Submitted: {new Date(pass.created_at).toLocaleString()}</span>
+                                </div>
+
+                                {pass.qr_url && (
+                                  <div className="mt-4 p-3 bg-green-50 border border-green-200 rounded-lg">
+                                    <div className="flex items-center justify-between">
+                                      <div className="flex items-center space-x-2 text-green-800">
+                                        <FiCheckCircle className="w-4 h-4" />
+                                        <span className="text-sm font-medium">QR Code Generated</span>
+                                      </div>
+                                      <button
+                                        onClick={() => downloadQRCode(pass.qr_url!, student?.name)}
+                                        className="flex items-center space-x-1 text-green-700 hover:text-green-800 text-sm font-medium px-3 py-1 rounded-lg bg-green-100 hover:bg-green-200 transition-colors"
+                                      >
+                                        <FiDownload className="w-3 h-3" />
+                                        <span>Download</span>
+                                      </button>
+                                    </div>
+                                  </div>
+                                )}
+                              </div>
+
+                              <div className="flex flex-col space-y-3 min-w-[140px]">
+                                {pass.status === 'pending' && (
+                                  <>
+                                    <motion.button
+                                      whileHover={{ scale: 1.02 }}
+                                      whileTap={{ scale: 0.98 }}
+                                      onClick={() => handleApprove(pass.id, pass.student_id)}
+                                      disabled={processing === pass.id}
+                                      className="bg-green-600 text-white px-4 py-3 rounded-xl text-sm font-medium hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors shadow-lg shadow-green-500/25"
+                                    >
+                                      {processing === pass.id ? (
+                                        <div className="flex items-center justify-center space-x-2">
+                                          <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                                          <span>Approving...</span>
+                                        </div>
+                                      ) : (
+                                        'Approve Request'
+                                      )}
+                                    </motion.button>
+                                    <motion.button
+                                      whileHover={{ scale: 1.02 }}
+                                      whileTap={{ scale: 0.98 }}
+                                      onClick={() => handleReject(pass.id)}
+                                      disabled={processing === pass.id}
+                                      className="bg-red-600 text-white px-4 py-3 rounded-xl text-sm font-medium hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                                    >
+                                      {processing === pass.id ? 'Rejecting...' : 'Reject Request'}
+                                    </motion.button>
+                                  </>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                        </motion.li>
+                      );
+                    })}
+                  </motion.ul>
+                )
+              ) : (
+                filteredStudents.length === 0 ? (
+                  <motion.div
+                    key="empty-students"
+                    initial={{ opacity: 0, scale: 0.9 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    exit={{ opacity: 0, scale: 0.9 }}
+                    className="text-center py-16"
+                  >
+                    <div className="w-24 h-24 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                      <FiUsers className="w-10 h-10 text-gray-400" />
+                    </div>
+                    <h3 className={`text-xl font-semibold mb-2 ${themeClasses.text.primary}`}>
+                      No students found
+                    </h3>
+                    <p className={`max-w-sm mx-auto mb-4 ${themeClasses.text.secondary}`}>
+                      {studentsLoading 
+                        ? "Loading students..."
+                        : "No students found in your department."
+                      }
+                    </p>
+                    <div className="space-y-3">
+                      <button
+                        onClick={fetchStudents}
+                        className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors"
+                      >
+                        {studentsLoading ? 'Loading...' : 'Refresh Students'}
+                      </button>
+                    </div>
+                  </motion.div>
+                ) : (
+                  <motion.div
+                    key="students-list"
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    className="divide-y divide-gray-200"
+                  >
+                    {/* Selection Header */}
+                    <div className={`p-4 border-b ${
+                      darkMode ? 'bg-gray-700 border-gray-600' : 'bg-gray-50 border-gray-200'
+                    }`}>
+                      <div className="flex items-center justify-between">
+                        <button
+                          onClick={toggleSelectAll}
+                          className="flex items-center space-x-3 text-sm font-medium"
+                        >
+                          <div className={`w-5 h-5 border-2 rounded flex items-center justify-center ${
+                            selectedStudents.size === filteredStudents.length
+                              ? 'bg-blue-600 border-blue-600 text-white'
+                              : darkMode
+                                ? 'border-gray-500 text-transparent'
+                                : 'border-gray-400 text-transparent'
+                          }`}>
+                            {selectedStudents.size === filteredStudents.length && (
+                              <FiCheck className="w-3 h-3" />
+                            )}
+                          </div>
+                          <span className={themeClasses.text.secondary}>
+                            {selectedStudents.size === filteredStudents.length
+                              ? 'Deselect All'
+                              : 'Select All'
+                            }
+                          </span>
+                        </button>
+                        <span className={`text-sm ${themeClasses.text.muted}`}>
+                          {selectedStudents.size} of {filteredStudents.length} selected
+                        </span>
+                      </div>
+                    </div>
+
+                    {filteredStudents.map((student, index) => (
+                      <motion.div
+                        key={student.id}
+                        initial={{ opacity: 0, y: 20 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ delay: index * 0.1 }}
+                        className={`hover:bg-gray-50 transition-colors duration-200 p-6 ${
+                          isStudentSelected(student.id) 
+                            ? darkMode 
+                              ? 'bg-blue-900/20' 
+                              : 'bg-blue-50'
+                            : ''
+                        }`}
+                      >
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center space-x-4">
+                            <button
+                              onClick={() => toggleStudentSelection(student.id)}
+                              className="flex-shrink-0"
+                            >
+                              <div className={`w-5 h-5 border-2 rounded flex items-center justify-center ${
+                                isStudentSelected(student.id)
+                                  ? 'bg-blue-600 border-blue-600 text-white'
+                                  : darkMode
+                                    ? 'border-gray-500 text-transparent'
+                                    : 'border-gray-400 text-transparent'
+                              }`}>
+                                {isStudentSelected(student.id) && (
+                                  <FiCheck className="w-3 h-3" />
+                                )}
+                              </div>
+                            </button>
+                            <div className="w-12 h-12 bg-gradient-to-br from-blue-500 to-blue-600 rounded-full flex items-center justify-center">
+                              <FiUser className="w-6 h-6 text-white" />
+                            </div>
+                            <div>
+                              <h3 className={`text-lg font-semibold ${themeClasses.text.primary}`}>
+                                {student.name}
+                              </h3>
+                              <div className="flex flex-wrap gap-4 mt-1 text-sm text-gray-600">
+                                <span className="flex items-center space-x-1">
+                                  <FiBook className="w-4 h-4" />
+                                  <span>Roll: <strong>{student.roll}</strong></span>
+                                </span>
+                                <span className="flex items-center space-x-1">
+                                  <FiCalendar className="w-4 h-4" />
+                                  <span>Year: <strong>{student.year}</strong></span>
+                                </span>
+                                <span className="flex items-center space-x-1">
+                                  <FiHash className="w-4 h-4" />
+                                  <span>ID: <strong className="font-mono text-xs">{student.id}</strong></span>
+                                </span>
+                              </div>
+                            </div>
+                          </div>
+                          <div className="flex items-center space-x-3">
+                            <div className="text-right mr-4">
+                              <div className={`text-sm ${themeClasses.text.muted}`}>
+                                Joined: {new Date(student.created_at).toLocaleDateString()}
+                              </div>
+                              <div className="text-lg font-bold text-blue-600">
+                                Year {student.year}
+                              </div>
+                            </div>
+                            <div className="flex flex-col space-y-2">
+                              <motion.button
+                                whileHover={{ scale: 1.05 }}
+                                whileTap={{ scale: 0.95 }}
+                                onClick={() => handlePromoteStudent(student.id, student.year)}
+                                disabled={promoteDemoteLoading === student.id}
+                                className="flex items-center space-x-2 bg-green-600 text-white px-3 py-2 rounded-lg text-sm font-medium hover:bg-green-700 disabled:opacity-50 transition-colors"
+                                title="Promote to next year"
+                              >
+                                {promoteDemoteLoading === student.id ? (
+                                  <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                                ) : (
+                                  <FiArrowUp className="w-4 h-4" />
+                                )}
+                                <span>Promote</span>
+                              </motion.button>
+                              <motion.button
+                                whileHover={{ scale: 1.05 }}
+                                whileTap={{ scale: 0.95 }}
+                                onClick={() => handleDemoteStudent(student.id, student.year)}
+                                disabled={promoteDemoteLoading === student.id || student.year <= 1}
+                                className="flex items-center space-x-2 bg-orange-600 text-white px-3 py-2 rounded-lg text-sm font-medium hover:bg-orange-700 disabled:opacity-50 transition-colors"
+                                title="Demote to previous year"
+                              >
+                                {promoteDemoteLoading === student.id ? (
+                                  <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                                ) : (
+                                  <FiArrowDown className="w-4 h-4" />
+                                )}
+                                <span>Demote</span>
+                              </motion.button>
+                            </div>
+                          </div>
+                        </div>
+                      </motion.div>
+                    ))}
+                  </motion.div>
+                )
+              )}
+            </AnimatePresence>
+          </motion.div>
+        </div>
       </div>
+
+      {/* Footer from code 2 */}
+      <footer className={`border-t ${
+        darkMode ? "border-gray-800 bg-gray-900" : "border-gray-200 bg-white"
+      } transition-colors duration-300`}>
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+          <div className="flex justify-between items-center">
+            <div>
+              <p className={`text-sm ${themeClasses.text.muted}`}>
+                © 2025 Cabin Khojo
+              </p>
+            </div>
+            <div>
+              <p className={`text-sm ${themeClasses.text.muted}`}>
+                Institutional Staff Management
+              </p>
+            </div>
+          </div>
+        </div>
+      </footer>
     </div>
   );
 }
