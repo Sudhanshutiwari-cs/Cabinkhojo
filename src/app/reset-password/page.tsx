@@ -6,7 +6,6 @@ interface PageProps {
 }
 
 export default async function ResetPasswordPage({ searchParams }: PageProps) {
-  // Await the searchParams Promise
   const params = await searchParams;
   const accessToken = Array.isArray(params.access_token) 
     ? params.access_token[0] 

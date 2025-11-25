@@ -19,6 +19,7 @@ export default function ResetPasswordClient({ serverAccessToken }: ResetPassword
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
   const [passwordStrength, setPasswordStrength] = useState(0);
+  const [isValidToken, setIsValidToken] = useState<boolean | null>(null);
 
   // Password strength checker
   useEffect(() => {
@@ -30,29 +31,41 @@ export default function ResetPasswordClient({ serverAccessToken }: ResetPassword
     setPasswordStrength(strength);
   }, [password]);
 
-  // Set session with access token
+  // Verify token and set session
   useEffect(() => {
-    if (!serverAccessToken) return;
-    
-    const setAuthSession = async () => {
+    const verifyToken = async () => {
+      if (!serverAccessToken) {
+        setIsValidToken(false);
+        return;
+      }
+
       try {
-        await supabase.auth.setSession({
-          access_token: serverAccessToken,
-          refresh_token: serverAccessToken,
+        // For password reset, we need to exchange the token for a session
+        const { data, error } = await supabase.auth.verifyOtp({
+          token_hash: serverAccessToken,
+          type: 'recovery'
         });
+
+        if (error) {
+          console.error("Token verification error:", error);
+          setIsValidToken(false);
+        } else {
+          setIsValidToken(true);
+        }
       } catch (error) {
-        console.error("Error setting auth session:", error);
+        console.error("Token verification failed:", error);
+        setIsValidToken(false);
       }
     };
 
-    setAuthSession();
+    verifyToken();
   }, [serverAccessToken]);
 
   const handleReset = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    if (!serverAccessToken) {
-      setMessage("Invalid token.");
+    if (!serverAccessToken || !isValidToken) {
+      setMessage("Invalid or expired token.");
       return;
     }
 
@@ -70,6 +83,19 @@ export default function ResetPasswordClient({ serverAccessToken }: ResetPassword
     setMessage("");
 
     try {
+      // First verify the token again to ensure it's still valid
+      const { error: verifyError } = await supabase.auth.verifyOtp({
+        token_hash: serverAccessToken,
+        type: 'recovery'
+      });
+
+      if (verifyError) {
+        setMessage("Token has expired. Please request a new reset link.");
+        setLoading(false);
+        return;
+      }
+
+      // Update the password
       const { error } = await supabase.auth.updateUser({
         password: password,
       });
@@ -104,14 +130,30 @@ export default function ResetPasswordClient({ serverAccessToken }: ResetPassword
     return "Strong";
   };
 
-  if (!serverAccessToken) {
+  // Show loading while checking token
+  if (isValidToken === null) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-100 px-4">
+        <div className="bg-white rounded-2xl shadow-xl p-8 max-w-md w-full text-center">
+          <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
+            <Loader2 className="w-8 h-8 text-blue-600 animate-spin" />
+          </div>
+          <h1 className="text-2xl font-bold text-gray-900 mb-2">Verifying Link</h1>
+          <p className="text-gray-600">Checking your reset link...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Show invalid token message
+  if (!isValidToken || !serverAccessToken) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-100 px-4">
         <div className="bg-white rounded-2xl shadow-xl p-8 max-w-md w-full text-center">
           <XCircle className="w-16 h-16 text-red-500 mx-auto mb-4" />
-          <h1 className="text-2xl font-bold text-gray-900 mb-2">Invalid Token</h1>
+          <h1 className="text-2xl font-bold text-gray-900 mb-2">Invalid or Expired Link</h1>
           <p className="text-gray-600 mb-6">
-            This password reset link is invalid or has expired.
+            This password reset link is invalid or has expired. Please request a new one.
           </p>
           <button
             onClick={() => router.push("/auth/forgot-password")}
