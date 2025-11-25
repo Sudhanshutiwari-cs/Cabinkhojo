@@ -170,7 +170,6 @@ export default function HODRequests() {
       }
 
       setUserId(user.id);
-      console.log('User ID:', user.id);
 
       const { data: profile, error } = await supabase
         .from('profiles')
@@ -179,14 +178,11 @@ export default function HODRequests() {
         .single();
 
       if (error) {
-        console.error('Profile error:', error);
         setDebugInfo(`Profile error: ${error.message}`);
         setUnauthorized(true);
         router.push('/login');
         return;
       }
-
-      console.log('Profile data:', profile);
 
       if (!profile || profile.role !== 'hod') {
         setDebugInfo(`User role is: ${profile?.role}, expected: hod`);
@@ -201,7 +197,6 @@ export default function HODRequests() {
       
     } catch (error: unknown) {
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-      console.error('Authentication error:', error);
       setDebugInfo(`Error: ${errorMessage}`);
       setUnauthorized(true);
       router.push('/login');
@@ -211,7 +206,6 @@ export default function HODRequests() {
   const fetchGatePasses = async (): Promise<void> => {
     try {
       setLoading(true);
-      console.log('Fetching gate passes for HOD:', userId, 'Department:', userDepartment);
 
       // Try multiple query approaches to find what works
       let query = supabase
@@ -235,7 +229,6 @@ export default function HODRequests() {
       const { data, error } = await query;
 
       if (error) {
-        console.error('Gate passes query error:', error);
         setDebugInfo(prev => prev + ` | Query error: ${error.message}`);
         
         // If the first approach fails, try a different approach
@@ -243,13 +236,11 @@ export default function HODRequests() {
         return;
       }
 
-      console.log('Filtered gate passes:', data);
       setGatePasses(data || []);
       setDebugInfo(prev => prev + ` | Found ${data?.length} passes for department ${userDepartment}`);
       
     } catch (error: unknown) {
       const err = error as SupabaseError;
-      console.error('Unexpected error:', error);
       if (err.details) {
         setDebugInfo(prev => prev + ` | Details: ${err.details}`);
       }
@@ -263,8 +254,6 @@ export default function HODRequests() {
 
   const fetchGatePassesAlternative = async (): Promise<void> => {
     try {
-      console.log('Trying alternative gate pass fetch approach...');
-      
       // Alternative approach: Get students first, then their gate passes
       const { data: departmentStudents, error: studentsError } = await supabase
         .from('profiles')
@@ -273,18 +262,15 @@ export default function HODRequests() {
         .eq('role', 'student');
 
       if (studentsError) {
-        console.error('Error fetching department students:', studentsError);
         return;
       }
 
       if (!departmentStudents || departmentStudents.length === 0) {
-        console.log('No students found in department:', userDepartment);
         setGatePasses([]);
         return;
       }
 
       const studentIds = departmentStudents.map(student => student.id);
-      console.log('Student IDs in department:', studentIds);
 
       const { data: passes, error: passesError } = await supabase
         .from('gatepasses')
@@ -301,16 +287,14 @@ export default function HODRequests() {
         .order('created_at', { ascending: false });
 
       if (passesError) {
-        console.error('Error fetching passes for students:', passesError);
         return;
       }
 
-      console.log('Gate passes via student IDs:', passes);
       setGatePasses(passes || []);
       setDebugInfo(prev => prev + ` | Alternative approach found ${passes?.length} passes`);
       
     } catch (error) {
-      console.error('Alternative approach error:', error);
+      // Silent catch for alternative approach
     }
   };
 
@@ -327,7 +311,6 @@ export default function HODRequests() {
         .order('roll', { ascending: true });
 
       if (error) {
-        console.error('Students query error:', error);
         setDebugInfo(prev => prev + ` | Students query error: ${error.message}`);
         throw error;
       }
@@ -338,13 +321,11 @@ export default function HODRequests() {
         year: parseInt(student.year || '1', 10) // Convert string to number, default to 1 if null
       }));
 
-      console.log('Department students:', studentsWithNumberYear);
       setStudents(studentsWithNumberYear);
       setDebugInfo(prev => prev + ` | Found ${data?.length} students`);
       
     } catch (error: unknown) {
       const err = error as SupabaseError;
-      console.error('Students fetch error:', error);
       if (err.details) {
         setDebugInfo(prev => prev + ` | Details: ${err.details}`);
       }
@@ -759,7 +740,7 @@ export default function HODRequests() {
     }
   };
 
-  const exportAllBatches = async (): Promise<void> => {
+  const _exportAllBatches = async (): Promise<void> => {
     try {
       setExportLoading('all');
       
@@ -779,14 +760,14 @@ export default function HODRequests() {
 
       // Create CSV content with year sections
       const headers = ['Name', 'Roll Number', 'Year', 'Department', 'Student ID', 'Joined Date'];
-      let csvContent = [];
+      const csvRows = [];
       
       // Add header
-      csvContent.push(headers.join(','));
+      csvRows.push(headers.join(','));
       
       // Add all students
       students.forEach(student => {
-        csvContent.push([
+        csvRows.push([
           `"${student.name.replace(/"/g, '""')}"`,
           student.roll,
           student.year,
@@ -797,15 +778,15 @@ export default function HODRequests() {
       });
 
       // Add summary section
-      csvContent.push(''); // Empty line
-      csvContent.push('SUMMARY');
-      csvContent.push('Year,Total Students');
+      csvRows.push(''); // Empty line
+      csvRows.push('SUMMARY');
+      csvRows.push('Year,Total Students');
       Object.keys(studentsByYear).sort().forEach(year => {
-        csvContent.push(`${year},${studentsByYear[parseInt(year)].length}`);
+        csvRows.push(`${year},${studentsByYear[parseInt(year)].length}`);
       });
-      csvContent.push(`TOTAL,${students.length}`);
+      csvRows.push(`TOTAL,${students.length}`);
 
-      const finalCsvContent = csvContent.join('\n');
+      const finalCsvContent = csvRows.join('\n');
 
       // Create blob and download
       const blob = new Blob([finalCsvContent], { type: 'text/csv;charset=utf-8;' });
@@ -844,7 +825,6 @@ export default function HODRequests() {
       router.replace('/login');
     } catch (error: unknown) {
       const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
-      console.error('Error logging out:', errorMessage);
       alert('Failed to logout. Please try again.');
     } finally {
       setLogoutLoading(false);
@@ -945,6 +925,7 @@ export default function HODRequests() {
   };
 
   const showNotification = (message: string, type: 'success' | 'error' | 'warning' | 'info'): void => {
+    // Using alert for simplicity, but you could replace this with a proper notification system
     alert(`${type.toUpperCase()}: ${message}`);
   };
 
@@ -1450,9 +1431,6 @@ export default function HODRequests() {
                       }
                     </span>
                   </button>
-
-                  {/* Export All Batches Button */}
-                  
                 </div>
               </div>
 

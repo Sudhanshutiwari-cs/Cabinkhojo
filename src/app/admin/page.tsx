@@ -35,12 +35,27 @@ export default function AdminPanel() {
   const [uploadLoading, setUploadLoading] = useState(false);
   const [logs, setLogs] = useState<string[]>([]);
 
+  // Get admin credentials from environment variables
+  const getAdminCredentials = () => {
+    // For client-side, we can use NEXT_PUBLIC_ prefix
+    const adminUsername = process.env.NEXT_PUBLIC_ADMIN_USERNAME;
+    const adminPassword = process.env.NEXT_PUBLIC_ADMIN_PASSWORD;
+    
+    // Fallback to defaults if env vars are not set (for development)
+    return {
+      username: adminUsername || "admin",
+      password: adminPassword || "admin123"
+    };
+  };
+
   // Handle login
   const handleLogin = (e: React.FormEvent) => {
     e.preventDefault();
     setLoginError("");
 
-    if (loginData.username === "admin" && loginData.password === "admin123") {
+    const { username: adminUsername, password: adminPassword } = getAdminCredentials();
+
+    if (loginData.username === adminUsername && loginData.password === adminPassword) {
       setIsAuthenticated(true);
       sessionStorage.setItem("adminAuthenticated", "true");
     } else {
@@ -280,7 +295,6 @@ export default function AdminPanel() {
     "Psychology Department",
     "PCRC",
     "SDC",
-
   ];
 
   // Login Form
@@ -361,11 +375,7 @@ export default function AdminPanel() {
               </button>
             </div>
           </form>
-          <div className="text-center">
-            <p className="text-xs text-gray-500">
-              Default credentials: admin / admin123
-            </p>
-          </div>
+          {/* Removed default credentials hint for security */}
         </div>
       </div>
     );
