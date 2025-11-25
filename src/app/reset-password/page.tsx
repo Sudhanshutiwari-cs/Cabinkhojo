@@ -1,3 +1,4 @@
+// app/reset-password/ResetPasswordContent.tsx
 "use client";
 
 import { useEffect, useState } from "react";
@@ -5,7 +6,7 @@ import { supabase } from "@/lib/supabase";
 import { useSearchParams, useRouter } from "next/navigation";
 import { Eye, EyeOff, CheckCircle, XCircle, Loader2 } from "lucide-react";
 
-export default function ResetPasswordPage() {
+export default function ResetPasswordContent() {
   const params = useSearchParams();
   const router = useRouter();
   const accessToken = params.get("access_token");
