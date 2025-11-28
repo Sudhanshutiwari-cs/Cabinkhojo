@@ -233,13 +233,11 @@ export default function StudentDashboard() {
 
   const stats = getStats();
 
-  // Show loading state while checking authentication and role
   if (loading) {
     return (
       <div className={`min-h-screen ${themeClasses.background} p-6 transition-colors duration-300`}>
         <div className="max-w-7xl mx-auto">
           <div className="animate-pulse space-y-6">
-            {/* Welcome Skeleton */}
             <div className="h-12 bg-gray-200 rounded w-1/3 mb-2"></div>
             <div className="h-4 bg-gray-200 rounded w-1/4 mb-8"></div>
             
@@ -265,7 +263,6 @@ export default function StudentDashboard() {
   return (
     <div className={`min-h-screen ${themeClasses.background} transition-colors duration-300`}>
       
-      {/* Header from code 2 */}
       <header className={`${themeClasses.header} sticky top-0 z-50 transition-colors duration-300`}>
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center h-16">
@@ -303,7 +300,6 @@ export default function StudentDashboard() {
 
       <div className="p-6">
         <div className="max-w-7xl mx-auto">
-          {/* Welcome Header with Logout */}
           <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-8">
             <div className="flex-1">
               <h1 className={`text-3xl sm:text-4xl font-bold ${themeClasses.text.primary} mb-2`}>
@@ -314,7 +310,6 @@ export default function StudentDashboard() {
               </p>
             </div>
             <div className="flex items-center gap-2">
-              {/* Refresh Button */}
               <button
                 onClick={handleRefresh}
                 disabled={refreshing}
@@ -327,7 +322,6 @@ export default function StudentDashboard() {
                 </span>
               </button>
               
-              {/* Logout Button */}
               <button
                 onClick={handleLogout}
                 disabled={logoutLoading}
@@ -344,7 +338,6 @@ export default function StudentDashboard() {
             </div>
           </div>
 
-          {/* Header with Actions */}
           <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-8">
             <div>
               <h2 className={`text-2xl font-bold ${themeClasses.text.primary}`}>Gate Pass Dashboard</h2>
@@ -359,7 +352,7 @@ export default function StudentDashboard() {
             </Link>
           </div>
 
-          {/* Stats Cards */}
+          
           <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
             <div className={`p-6 rounded-2xl shadow-lg border transition-colors duration-300 ${themeClasses.card}`}>
               <div className="flex items-center justify-between">
@@ -410,7 +403,6 @@ export default function StudentDashboard() {
             </div>
           </div>
 
-          {/* Filters */}
           <div className="flex flex-wrap gap-2 mb-6">
             {[
               { key: 'all' as const, label: 'All Requests', count: stats.total },
@@ -432,7 +424,6 @@ export default function StudentDashboard() {
             ))}
           </div>
 
-          {/* Gate Passes List */}
           <div className="space-y-4">
             {filteredPasses.map((pass) => {
               const statusConfig = getStatusConfig(pass.status);
@@ -525,7 +516,7 @@ export default function StudentDashboard() {
         </div>
       </div>
 
-      {/* Footer from code 2 */}
+      
       <footer className={`border-t ${
         darkMode ? "border-gray-800 bg-gray-900" : "border-gray-200 bg-white"
       } transition-colors duration-300`}>

@@ -1,7 +1,6 @@
 // app/page.tsx
 'use client';
 
-import Link from 'next/link';
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 
@@ -18,9 +17,39 @@ const MoonIcon = ({ className = "w-4 h-4" }: { className?: string }) => (
   </svg>
 );
 
+const BuildingIcon = ({ className = "w-6 h-6" }: { className?: string }) => (
+  <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
+  </svg>
+);
+
+const CodeIcon = ({ className = "w-6 h-6" }: { className?: string }) => (
+  <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4" />
+  </svg>
+);
+
+const ArrowIcon = ({ className = "w-5 h-5" }: { className?: string }) => (
+  <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7l5 5m0 0l-5 5m5-5H6" />
+  </svg>
+);
+
+const CheckIcon = ({ className = "w-5 h-5" }: { className?: string }) => (
+  <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+  </svg>
+);
+
 export default function Home() {
   const [darkMode, setDarkMode] = useState<boolean>(false);
+  const [instituteCode, setInstituteCode] = useState<string>('');
+  const [isLoading, setIsLoading] = useState<boolean>(false);
+  const [error, setError] = useState<string>('');
   const router = useRouter();
+
+  // Allowed institute codes
+  const allowedCodes = ['kit165', 'kit550', 'mit202'];
 
   // Initialize dark mode from localStorage or system preference
   useEffect(() => {
@@ -53,13 +82,37 @@ export default function Home() {
     }
   };
 
-  // Handle card clicks
-  const handleKITClick = () => {
-    router.push('/service');
-  };
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError('');
+    
+    if (!instituteCode.trim()) {
+      setError('Please enter your institute code');
+      return;
+    }
 
-  const handleKITPClick = () => {
-    router.push('/kitp550');
+    // Convert to lowercase for case-insensitive comparison
+    const enteredCode = instituteCode.trim().toLowerCase();
+
+    // Validate against allowed codes
+    if (!allowedCodes.includes(enteredCode)) {
+      setError('Invalid institute code. Please check your code and try again.');
+      return;
+    }
+
+    setIsLoading(true);
+
+    try {
+      // Simulate API call or validation
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      
+      // Redirect to /entered-code with the validated code
+      router.push(`/${enteredCode}`);
+    } catch (err) {
+      setError('An error occurred. Please try again.');
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   // Professional theme classes - exactly like in the provided code
@@ -118,7 +171,7 @@ export default function Home() {
               </div>
               <div>
                 <h1 className={`text-lg font-semibold ${themeClasses.text.primary}`}>Cabin Khojo</h1>
-                <p className={`text-xs ${themeClasses.text.muted}`}>Staff Locator System</p>
+                <p className={`text-xs ${themeClasses.text.muted}`}>Institute Portal</p>
               </div>
             </div>
             
@@ -138,100 +191,149 @@ export default function Home() {
         </div>
       </header>
 
-      {/* Main Contenct */}
+      {/* Main Content */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {/* Institute Information */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-12">
-          {/* KIT Section */}
-          <div 
-            onClick={handleKITClick}
-            className={`rounded-lg ${themeClasses.card} p-6 border-l-4 border-blue-600 transition-colors duration-300 cursor-pointer hover:shadow-lg transform hover:-translate-y-1 transition-all duration-200`}
-          >
-            <h1 className={`text-2xl font-bold ${themeClasses.text.primary} mb-4`}>
-              KANPUR INSTITUTE OF TECHNOLOGY
-            </h1>
-            <p className={`text-sm ${themeClasses.text.muted} mb-2`}>AICTE APPROVED | AKTU AFFILIATED</p>
-            
-            <div className={`rounded-lg p-4 ${
-              darkMode ? "bg-gray-700/50" : "bg-gray-50"
-            } transition-colors duration-300`}>
-              <h2 className={`text-lg font-semibold ${themeClasses.text.primary} mb-2`}>
-                Kanpur Institute of Technology
-              </h2>
-              <p className={`${themeClasses.text.secondary} mb-2`}>AKTU Code : 165</p>
-              <p className={`text-sm ${themeClasses.text.muted} mt-3`}>
-                Use <span className={`font-mono font-bold ${themeClasses.text.accent}`}>KIT165</span> as institute code to join college on mobile app.
-              </p>
-            </div>
-          </div>
+        {/* Welcome Section */}
+        <div className="text-center mb-12">
+          <h1 className={`text-4xl font-bold ${themeClasses.text.primary} mb-4`}>
+            Welcome to Cabin Khojo
+          </h1>
+          <p className={`text-xl ${themeClasses.text.secondary} max-w-2xl mx-auto`}>
+            Enter your institute code to access the staff management and campus navigation system
+          </p>
+        </div>
 
-          {/* KITP Section */}
-          <div 
-            onClick={handleKITPClick}
-            className={`rounded-lg ${themeClasses.card} p-6 border-l-4 border-green-600 transition-colors duration-300 cursor-pointer hover:shadow-lg transform hover:-translate-y-1 transition-all duration-200`}
-          >
-            <h1 className={`text-2xl font-bold ${themeClasses.text.primary} mb-4`}>
-              KANPUR INSTITUTE OF TECHNOLOGY AND PHARMACY
-            </h1>
-            <p className={`text-sm ${themeClasses.text.muted} mb-2`}>APPROVED | AKTU & BTE AFFILIATED</p>
+        {/* Institute Code Input Section */}
+        <div className="max-w-md mx-auto">
+          <div className={`rounded-lg ${themeClasses.card} p-8 border-l-4 border-blue-600 transition-colors duration-300 shadow-lg`}>
+            <div className={`w-20 h-20 rounded-full flex items-center justify-center mx-auto mb-6 ${
+              darkMode ? "bg-blue-900/30" : "bg-blue-50"
+            }`}>
+              <BuildingIcon className={`w-10 h-10 ${themeClasses.text.accent}`} />
+            </div>
             
-            <div className={`rounded-lg p-4 ${
-              darkMode ? "bg-gray-700/50" : "bg-gray-50"
-            } transition-colors duration-300`}>
-              <h2 className={`text-lg font-semibold ${themeClasses.text.primary} mb-2`}>
-                Kanpur Institute of Technology And Pharmacy
-              </h2>
-              <p className={`${themeClasses.text.secondary} mb-2`}>AKTU Code : 550 & BTE Code : 3380</p>
-              <p className={`text-sm ${themeClasses.text.muted} mt-3`}>
-                Use <span className={`font-mono font-bold ${darkMode ? "text-green-400" : "text-green-600"}`}>KIT360</span> as institute code to join college on mobile app.
+            <h2 className={`text-2xl font-bold ${themeClasses.text.primary} mb-2 text-center`}>
+              Enter Institute Code
+            </h2>
+            
+            <p className={`${themeClasses.text.secondary} mb-6 text-center`}>
+              Please enter your unique institute code to proceed to the portal
+            </p>
+
+            <form onSubmit={handleSubmit} className="space-y-4">
+              <div>
+                <label htmlFor="instituteCode" className={`block text-sm font-medium ${themeClasses.text.secondary} mb-2`}>
+                  Institute Code
+                </label>
+                <div className="relative">
+                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                    <CodeIcon className={`w-5 h-5 ${themeClasses.text.muted}`} />
+                  </div>
+                  <input
+                    id="instituteCode"
+                    type="text"
+                    value={instituteCode}
+                    onChange={(e) => setInstituteCode(e.target.value)}
+                    placeholder="e.g., kit165, kit550, mit202"
+                    className={`block w-full pl-10 pr-4 py-3 border rounded-lg transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
+                      themeClasses.input
+                    } ${error ? 'border-red-500' : ''}`}
+                    disabled={isLoading}
+                  />
+                </div>
+                {error && (
+                  <p className={`mt-2 text-sm ${darkMode ? 'text-red-400' : 'text-red-600'}`}>
+                    {error}
+                  </p>
+                )}
+              </div>
+
+              <button
+                type="submit"
+                disabled={isLoading || !instituteCode.trim()}
+                className={`w-full py-3 px-4 rounded-lg border transition-all duration-200 flex items-center justify-center font-semibold ${
+                  isLoading || !instituteCode.trim()
+                    ? themeClasses.button.disabled
+                    : themeClasses.button.primary
+                } ${isLoading ? 'cursor-not-allowed' : 'hover:shadow-md'}`}
+              >
+                {isLoading ? (
+                  <>
+                    <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg>
+                    Verifying...
+                  </>
+                ) : (
+                  <>
+                    Continue to Portal
+                    <ArrowIcon className="ml-2" />
+                  </>
+                )}
+              </button>
+            </form>
+
+            {/* Valid Codes Info */}
+            <div className={`mt-6 p-4 rounded-lg ${themeClasses.status.info} border text-sm`}>
+              <p className={`font-medium ${themeClasses.text.primary} mb-2`}>
+                Valid Institute Codes:
+              </p>
+              <div className="space-y-1">
+                {allowedCodes.map((code, index) => (
+                  <div key={code} className="flex items-center space-x-2">
+                    <CheckIcon className={`w-4 h-4 ${darkMode ? 'text-green-400' : 'text-green-600'}`} />
+                    <span className={themeClasses.text.secondary}>{code}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Help Text */}
+            <div className={`mt-4 p-3 rounded-lg ${darkMode ? 'bg-gray-700/50' : 'bg-gray-50'} text-xs`}>
+              <p className={themeClasses.text.muted}>
+                <strong>Note:</strong> Only the codes listed above are currently supported. 
+                Contact your administrator if you need access.
               </p>
             </div>
           </div>
         </div>
 
-        {/* Additional Content Sections */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-12">
-          {/* Feature Cards */}
-          <div className={`rounded-lg ${themeClasses.card} p-6 transition-colors duration-300`}>
-            <div className={`w-12 h-12 rounded-lg flex items-center justify-center ${
+        {/* Features Grid */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mt-12">
+          <div className={`rounded-lg ${themeClasses.card} p-6 transition-colors duration-300 text-center`}>
+            <div className={`w-12 h-12 rounded-lg flex items-center justify-center mx-auto mb-4 ${
               darkMode ? "bg-blue-900/30" : "bg-blue-50"
-            } mb-4`}>
-              <svg className={`w-6 h-6 ${themeClasses.text.accent}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
-              </svg>
+            }`}>
+              <BuildingIcon className={`w-6 h-6 ${themeClasses.text.accent}`} />
             </div>
-            <h3 className={`text-lg font-semibold ${themeClasses.text.primary} mb-2`}>Easy Location</h3>
+            <h3 className={`text-lg font-semibold ${themeClasses.text.primary} mb-2`}>Staff Directory</h3>
             <p className={`text-sm ${themeClasses.text.secondary}`}>
-              Quickly find faculty cabins and office locations across campus.
+              Access comprehensive staff information and contact details
             </p>
           </div>
 
-          <div className={`rounded-lg ${themeClasses.card} p-6 transition-colors duration-300`}>
-            <div className={`w-12 h-12 rounded-lg flex items-center justify-center ${
+          <div className={`rounded-lg ${themeClasses.card} p-6 transition-colors duration-300 text-center`}>
+            <div className={`w-12 h-12 rounded-lg flex items-center justify-center mx-auto mb-4 ${
               darkMode ? "bg-green-900/30" : "bg-green-50"
-            } mb-4`}>
-              <svg className={`w-6 h-6 ${darkMode ? "text-green-400" : "text-green-600"}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
-              </svg>
+            }`}>
+              <CodeIcon className={`w-6 h-6 ${darkMode ? "text-green-400" : "text-green-600"}`} />
             </div>
-            <h3 className={`text-lg font-semibold ${themeClasses.text.primary} mb-2`}>Verified Data</h3>
+            <h3 className={`text-lg font-semibold ${themeClasses.text.primary} mb-2`}>Campus Navigation</h3>
             <p className={`text-sm ${themeClasses.text.secondary}`}>
-              Accurate and up-to-date information verified by administration.
+              Find offices, cabins, and facilities with interactive maps
             </p>
           </div>
 
-          <div className={`rounded-lg ${themeClasses.card} p-6 transition-colors duration-300`}>
-            <div className={`w-12 h-12 rounded-lg flex items-center justify-center ${
+          <div className={`rounded-lg ${themeClasses.card} p-6 transition-colors duration-300 text-center`}>
+            <div className={`w-12 h-12 rounded-lg flex items-center justify-center mx-auto mb-4 ${
               darkMode ? "bg-purple-900/30" : "bg-purple-50"
-            } mb-4`}>
-              <svg className={`w-6 h-6 ${darkMode ? "text-purple-400" : "text-purple-600"}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-              </svg>
+            }`}>
+              <ArrowIcon className={`w-6 h-6 ${darkMode ? "text-purple-400" : "text-purple-600"}`} />
             </div>
-            <h3 className={`text-lg font-semibold ${themeClasses.text.primary} mb-2`}>Quick Search</h3>
+            <h3 className={`text-lg font-semibold ${themeClasses.text.primary} mb-2`}>Secure Access</h3>
             <p className={`text-sm ${themeClasses.text.secondary}`}>
-              Fast and intuitive search functionality for all faculty members.
+              Protected portal access with institute code verification
             </p>
           </div>
         </div>
@@ -240,7 +342,7 @@ export default function Home() {
       {/* Footer */}
       <footer className={`border-t ${
         darkMode ? "border-gray-800 bg-gray-900" : "border-gray-200 bg-white"
-      } transition-colors duration-300`}>
+      } transition-colors duration-300 mt-12`}>
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
           <div className="flex justify-between items-center">
             <div>
@@ -250,7 +352,7 @@ export default function Home() {
             </div>
             <div>
               <p className={`text-sm ${themeClasses.text.muted}`}>
-                Institutional Staff Management
+                Institutional Portal System
               </p>
             </div>
           </div>

@@ -9,5 +9,32 @@
         }
       ]
     }
+  ],
+
+  "rewrites": [
+    {
+      "source": "/forgot-password/:path*",
+      "destination": "/404"
+    },
+    {
+      "source": "/guard/:path*",
+      "destination": "/404"
+    },
+    {
+      "source": "/hod/:path*",
+      "destination": "/404"
+    },
+    {
+      "source": "/student/:path*",
+      "destination": "/404"
+    },
+    {
+      "source": "/reset-password/:path*",
+      "destination": "/404"
+    },
+    {
+      "source": "/service/:path*",
+      "destination": "/404"
+    }
   ]
 }
