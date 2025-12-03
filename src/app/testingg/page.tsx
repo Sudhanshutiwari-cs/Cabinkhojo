@@ -40,13 +40,9 @@ const Navbar = () => (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
       <div className="flex justify-between items-center h-16">
         <div className="flex items-center gap-2">
-          <div className="w-8 h-8 rounded-lg flex items-center justify-center shadow-lg shadow-blue-200 overflow-hidden">
-  <img 
-    src="/Logo_main.png" 
-    alt="Logo" 
-    className="w-full h-full object-cover"
-  />
-</div>
+          <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center text-white font-bold shadow-lg shadow-blue-200">
+            CK
+          </div>
           <span className="text-xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-blue-700 to-blue-500">
             Cabin Khojo
           </span>
@@ -159,7 +155,7 @@ export default function Home() {
 
         {/* Footer Info */}
         <div className="text-center border-t border-gray-200 pt-8 w-full">
-          <p className="text-gray-400 text-sm">© 2025 Cabin Khojo. Made with ❤️</p>
+          <p className="text-gray-400 text-sm">© 2025 Cabin Khojo. Made with ❤️ for KIT Kanpur.</p>
         </div>
       </main>
     </div>
